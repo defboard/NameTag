@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>NameTagOS</title>
+    <style>
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+/* javascript handled */
+
+#app {
+}
+
+h1 {
+  text-align: center;
+}
+
+/* navigation */
+nav {
+  display: flex;
+  justify-content: center;
+  background-color: #ddd;
+}
+nav > div {
+  flex-grow: 1;
+  flex-basis: 100%;
+  margin: 0.5ex 0.3em;
+  text-align: center;
+  background-color: #bbb;
+  cursor: pointer;
+}
+
+nav > div.disabled {
+  cursor: not-allowed;
+}
+
+nav > div.active {
+  background-color: #bdb;
+}
+
+nav > div:hover {
+  background-color: #999;
+}
+
+nav > div.active:hover {
+  background-color: #9b9;
+}
+
+/* main content tab */
+
+main {
+}
+
+fieldset {
+  padding: 0px 3px 3px 3px; /* t r b l */
+  margin-top: 5px;
+  margin-bottom: 10px;
+  border: none;
+  box-shadow: 0 0 10px #666;
+  border-radius: 10px;
+}
+fieldset > legend {
+  transform: translateY(-20%);
+  background-color: white;
+  font-size: 80%;
+  font-weight: bold;
+  width: auto;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+dl {
+  display: grid;
+  grid: "name value";
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+}
+dl > * {
+  padding: 0.5ex 1em;
+  margin: 0;
+}
+
+dl > *:nth-child(4n+1),
+dl > *:nth-child(4n+2) {
+  background-color: #eee;
+}
+dl > *:nth-child(4n+3),
+dl > *:nth-child(4n+4) {
+  background-color: #fff;
+}
+
+dd input[type="button"] {
+  width: 100%;
+}
+
+dd button {
+  font-weight: bold;
+  margin-left: 0.5em;
+  margin-right: 0.5em;
+}
+
+dt::after {
+  content: " (*)";
+  visibility: hidden;
+  font-weight: bold;
+}
+dt.modified::after {
+  visibility: visible;
+}
+
+dd progress {
+  width: 100%;
+}
+
+dt.success, dd.success {
+  background-color: #8e8;
+}
+
+dt.failure, dd.failure {
+  background-color: #ee8;
+}
+
+dt.error, dd.error {
+  background-color: #e88;
+}
+
+/* action buttons */
+
+.actions {
+  display: flex;
+  justify-content: center;
+}
+.actions > button {
+  flex-grow: 1;
+  flex-basis: 100%;
+  margin: 0.5ex 0.1em;
+}
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <script type="module">
+
+import { h, text, app } from "./hyperapp.js"
+
+const SECONDS_PER_DAY = 3600 * 24;
+const SECONDS_PER_HOUR = 3600;
+
+const updateRecursive = (a, b) => {
+  for (const key in b) {
+    if (typeof(a[key]) == "object" && !Array.isArray(a[key]) &&
+        typeof(b[key]) == "object" && !Array.isArray(b[key]))
+    {
+      updateRecursive(a[key], b[key]);
+    }
+    else {
+      a[key] = b[key];
+    }
+  }
+  return a;
+};
+
+
+const JSON_safeParse = (text) => {
+  try {
+    return JSON.parse(text) || {};
+  }
+  catch (e) {
+    return {};
+  }
+}
+
+// Local storage
+
+const storageKey = 'NameTagOS';
+const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
+const initialState = {
+  serverstatus: {
+    wifiMode: "STA",
+    wifiSsid: "NameTagNet",
+    wifiHostname: "NameTagOS",
+    wifiPassword: "",
+  },
+  // client
+  activeTab: "status",
+  editstatus: {},
+};
+updateRecursive(initialState, savedState);
+updateRecursive(initialState, {
+  disableInputs: true,
+});
+
+const storeLocal = (state) => {
+  localStorage.setItem(storageKey, JSON.stringify({
+    activeTab: state.activeTab,
+    serverstatus: state.serverstatus,
+  }));
+  return UpdateUI(state);
+};
+
+
+// Effects
+
+const fetchJson = (dispatch, [url, action]) => {
+  fetch(url)
+  .then(response => response.json())
+  .then(data => dispatch(action, data))
+};
+
+const postRequest = (dispatch, [url, data, action]) => {
+  fetch(url, {
+    method: "POST",
+    body: new URLSearchParams(data),
+  })
+  .then(response => response.json())
+  .then(data => dispatch(action, data))
+};
+
+const uploadFile = (dispatch, [url, file, progressAction, finishAction]) => {
+  const request = new XMLHttpRequest();
+  request.open("POST", url);
+  request.upload.onprogress = (event) => dispatch(progressAction, event);
+  request.onreadystatechange = (event) => {
+    if (request.readyState == 4) {
+      dispatch(finishAction, event);
+    }
+  };
+  const form = new FormData();
+  form.append("file", file, file.name),
+  request.send(form);
+};
+
+const timeout = (dispatch, [delay, action]) => {
+  setTimeout(() => dispatch(action), delay);
+};
+
+const reloadWindow = (dispatch) => {
+  window.location.reload();
+};
+
+const every = (dispatch, [delay, action]) => {
+  const id = setInterval(() => { dispatch(action); }, delay);
+  return () => clearInterval(id);
+};
+
+
+// Events
+
+const DISABLE_TIMEOUT = 750;
+const RELOAD_TIMEOUT = 10_000;
+
+const GotServerStatus = (state, serverstatus) => {
+  return [
+    storeLocal({
+      ...state,
+      serverstatus: {
+        ...state.serverstatus,
+        ...serverstatus,
+      },
+    }),
+    [timeout, [DISABLE_TIMEOUT, EnableInputs]],
+  ];
+};
+
+
+// Actions
+
+const UpdateUI = (state) => {
+  const editstatus = Object.fromEntries(Object.entries(state.editstatus).filter(
+    ([key, value]) => (value != state.serverstatus[key]),
+  ));
+  return {
+    ...state,
+    editstatus,
+  };
+}
+
+const EnableInputs = (state) => storeLocal({...state, disableInputs: false});
+const DisableInputs = (state) => storeLocal({...state, disableInputs: true});
+const ReloadWindow = (state) => [state, reloadWindow];
+
+const ShowTab = (activeTab) => (state) => storeLocal({
+  ...state,
+  activeTab,
+  firmwareImage: undefined,
+  uploadProgress: undefined,
+  uploadResult: undefined,
+});
+
+const RebootServer = (state, event) => ([
+  DisableInputs(state),
+  [fetchJson, ["api/server/reboot", GotServerStatus]],
+]);
+
+const UploadProgress = (state, event) => {
+  const uploadProgress = {
+    max: event.total,
+    value: event.loaded,
+  };
+  return { ...state, uploadProgress };
+};
+
+const UploadFinished = (state, event) => {
+  const query = event.target;
+  const { status, statusText } = query;
+  const response = JSON_safeParse(query.responseText);
+  const uploadResult = { status, statusText, ...response };
+  const success = uploadResult.status == 200 && uploadResult.code == 0;
+  const reloadTime = success ? Date.now() + RELOAD_TIMEOUT : undefined;
+  const effect = (
+    success
+    ? [timeout, [RELOAD_TIMEOUT, ReloadWindow]]
+    : [timeout, [DISABLE_TIMEOUT, EnableInputs]]
+  );
+  return [
+    { ...state, uploadResult, reloadTime },
+    effect,
+  ];
+};
+
+// Preferences
+const hasDefaultValue = (state, key) => (
+  state.editstatus[key] == undefined
+);
+
+const SetEditField = (state, key, value) => ({
+  ...state,
+  editstatus: {
+    ...state.editstatus,
+    [key]: value,
+  },
+});
+
+const PrefsSave = (state, event) => ([
+  DisableInputs(SetEditField(state, "wifiPassword", undefined)),
+  [postRequest, ["prefs", state.editstatus, GotServerStatus]],
+]);
+
+const PrefsRestore = (state) => storeLocal({...state, editstatus: {}});
+
+const UploadFirmware = (state) => ([
+  DisableInputs(state),
+  [uploadFile, ["update", state.firmwareImage, UploadProgress, UploadFinished]],
+]);
+
+
+const EditField = (key, parse) => (state, event) => storeLocal(SetEditField(state, key, parse(event.target.value)));
+
+const EditNumber = (key, multiplier) => EditField(key, (value) => Math.round(value * (multiplier ?? 1)));
+const EditText = (key) => EditField(key, (value) => value);
+
+const EditFile = (key) => (state, event) => {
+  return storeLocal({
+    ...state,
+    firmwareImage: event.target.files.length == 1 && event.target.files[0],
+  });
+};
+
+
+// UI components
+
+const Fieldset = (legend, fields) => (
+  h("fieldset", {}, [
+    h("legend", {}, text(legend)),
+    h("dl", {}, fields.flat(1)),
+  ])
+);
+
+const Field = (dt, props, dd) => ([
+  h("dt", props, text(dt)),
+  h("dd", props, dd),
+]);
+
+const HyperRef = (href, name) => (
+  h("a", {href, target: "_blank"}, text(name))
+);
+
+const InputField = (state, key, label, contentFunc) => {
+  const default_ = state.serverstatus[key];
+  const value = state.editstatus[key] ?? default_;
+  const modified = value != default_;
+  return Field(label, {class: {modified}}, contentFunc(key, value));
+};
+
+const TextInput = (props) => (key, value) => h("input", {
+  type: "text",
+  value,
+  oninput: EditText(key),
+  ...props,
+});
+
+const NumberInput = (props, multiplier, unitName) => (key, value) => [
+  h("input", {
+    type: "number",
+    value: value / multiplier,
+    oninput: EditNumber(key, multiplier),
+    ...props,
+  }),
+  unitName &&
+  h("span", {}, text(unitName)),
+];
+
+const RadioList = (name, items) => (key, value) => (
+  items.flatMap((item, idx) => [
+    h("input", {
+      type: "radio",
+      name,
+      value: item.value,
+      id: name + item.value,
+      checked: value == item.value,
+      oninput: EditText(key),
+    }),
+    h("label", {for: name + item.value}, text(item.label)),
+    (idx == items.length - 1) || h("br", {}, []),
+  ])
+);
+
+const NavButton = (state, name, label) => {
+  const disabled = state.disableInputs;
+  const active = state.activeTab == name;
+  return h("div", {
+    onclick: !disabled && !active && ShowTab(name),
+    class: { active, disabled },
+  }, text(label));
+};
+
+
+app({
+  init: [
+    UpdateUI(initialState),
+    [fetchJson, ["api/status", GotServerStatus]],
+  ],
+
+  subscriptions: (state) => [
+    [every, [1000, UpdateUI]],
+  ],
+
+  view: (state) => {
+    const {serverstatus, activeTab, disableInputs, editstatus} = state;
+    const isWiFiOff = (editstatus.wifiMode ?? serverstatus.wifiMode) == "OFF";
+
+    return h("div", {}, [
+      h("h1", {}, text("NameTagOS")),
+
+      h("nav", {}, [
+        NavButton(state, "status", "Status"),
+        NavButton(state, "prefs", "Preferences"),
+        NavButton(state, "update", "Update"),
+      ]),
+
+      activeTab == "status" && h('main', {}, [
+        Fieldset("Host device", [
+          Field("System events:",      {}, HyperRef("file/events.log", "events.log")),
+        ]),
+
+        h("div", {class: "actions"}, [
+          h("button", {onclick: RebootServer, disabled: disableInputs}, text("Reboot!")),
+        ]),
+      ]), // </main> "status"
+
+      activeTab == "prefs" && h('main', {}, [
+
+        Fieldset("WiFi settings", [
+          InputField(state, "wifiMode", "Connection mode:", RadioList("wifiMode", [
+            {value: "OFF", label: "Off"},
+            {value: "STA", label: "Client"},
+            {value: "AP", label: "Hotspot"},
+          ])),
+          InputField(state, "wifiSsid", "SSID/name:", TextInput({disabled: isWiFiOff})),
+          InputField(state, "wifiPassword", "Password:", TextInput({disabled: isWiFiOff, placeholder: "**************"})),
+          InputField(state, "wifiHostname", "Device hostname:", TextInput({disabled: isWiFiOff})),
+        ]),
+
+        h("div", {class: "actions"}, [
+          h("button", {onclick: PrefsSave, disabled: disableInputs}, text("Save")),
+          h("button", {onclick: PrefsRestore, disabled: disableInputs}, text("Restore")),
+        ]),
+      ]), // </main> "prefs"
+
+      activeTab == "update" && h('main', {}, [
+
+        Fieldset("Firmware", [
+          InputField(state, "firmwareImage", "Firmware image:", (key, value) => h("input", {
+            type: "file",
+            accept: ".bin,.bin.gz",
+            oninput: EditFile(key),
+          })),
+        ]),
+
+        (state.uploadProgress || state.uploadResult) &&
+        Fieldset("Upload", [
+          state.uploadProgress &&
+          Field("Progress:", {}, [
+            h("progress", state.uploadProgress),
+          ]),
+
+          state.uploadResult &&
+          Field("Message:", {class: {
+            success: state.uploadResult.status == 200 && state.uploadResult.code == 0,
+            error: state.uploadResult.status != 200,
+            failure: state.uploadResult.code > 0,
+          }}, [
+            text(state.uploadResult.message ?? state.uploadResult.statusText),
+          ]),
+        ]),
+
+        h("div", {class: "actions"}, [
+
+          !state.reloadTime &&
+          h("button", {
+            onclick: UploadFirmware,
+            disabled: disableInputs || !state.firmwareImage,
+          }, text("Upload firmware")),
+
+          state.reloadTime &&
+          h("button", {
+            onclick: ReloadWindow,
+          }, text(`Reload page (${Math.round((state.reloadTime - Date.now()) / 1000)}s)`)),
+        ]),
+
+      ]), // </main>
+
+    ]); // outer div
+  },
+
+  node: document.getElementById("app"),
+})
+
+    </script>
+  </body>
+</html>
