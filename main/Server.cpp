@@ -13,6 +13,11 @@
 
 #include <optional>
 
+
+// extern
+extern void showText(String text);
+
+
 // Globals
 WebServer server(80);
 HTTPUpdateServer updateServer;
@@ -29,6 +34,7 @@ void onHttpRoot();
 void onHttpHyperappJs();
 void onHttpFileEventsLog();
 void onHttpApiStatus();
+void onHttpApiText();
 void onHttpApiServerReboot();
 void onHttpApiPrefsPost();
 void sendFile(int code, const char* content_type, const uint8_t* start, const uint8_t* end);
@@ -62,12 +68,13 @@ void initWebServer()
   server.on("/file/events.log", onHttpFileEventsLog);
   server.on("/api/status", onHttpApiStatus);
   server.on("/api/server/reboot", onHttpApiServerReboot);
+  server.on("/api/text", HTTPMethod::HTTP_POST, onHttpApiText);
   server.on("/prefs", HTTPMethod::HTTP_POST, onHttpApiPrefsPost);
 
   updateServer.setup(&server, "/update");
   server.begin();
 
-  xTaskCreatePinnedToCore(handleServer, "server", 4096, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(handleServer, "server", 4096, NULL, 1, NULL, 1);
 }
 
 void handleServer(void* args)
@@ -114,6 +121,14 @@ void onHttpApiStatus()
   json.end_object();
 
   server.send(200, "application/json", (String&) response);
+}
+
+void onHttpApiText()
+{
+  String text = server.arg("text");
+  showText(text);
+
+  onHttpApiStatus();
 }
 
 void onHttpApiServerReboot()

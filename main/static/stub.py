@@ -61,6 +61,12 @@ def api_status():
     return server_info()
 
 
+@app.route("/api/text", methods=['POST'])
+def api_text():
+    log("text: ", request.form["text"])
+    return server_info()
+
+
 @app.route("/api/server/reboot")
 def api_server_reboot():
     log("Reboot")

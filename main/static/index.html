@@ -185,6 +185,7 @@ const initialState = {
     wifiSsid: "NameTagNet",
     wifiHostname: "NameTagOS",
     wifiPassword: "",
+    text: "",
   },
   // client
   activeTab: "status",
@@ -323,6 +324,11 @@ const UploadFinished = (state, event) => {
   ];
 };
 
+const SendTextInput = (state, event) => ([
+  DisableInputs(state),
+  [postRequest, ["api/text", {text: state.editstatus.text}, GotServerStatus]],
+]);
+
 // Preferences
 const hasDefaultValue = (state, key) => (
   state.editstatus[key] == undefined
@@ -458,8 +464,12 @@ app({
           Field("System events:",      {}, HyperRef("file/events.log", "events.log")),
         ]),
 
+        Fieldset("Display", [
+          InputField(state, "text", "Text:", TextInput({})),
+        ]),
+
         h("div", {class: "actions"}, [
-          h("button", {onclick: RebootServer, disabled: disableInputs}, text("Reboot!")),
+          h("button", {onclick: SendTextInput, disabled: disableInputs}, text("Update")),
         ]),
       ]), // </main> "status"
 

@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS "main.cpp" "System.cpp" "Server.cpp" "Wifi.cpp"
     INCLUDE_DIRS "."
-    REQUIRES arduino-esp32
+    REQUIRES arduino-esp32 GxEPD2
     EMBED_FILES
         "${CMAKE_CURRENT_BINARY_DIR}/index.html.gz"
         "${CMAKE_CURRENT_BINARY_DIR}/hyperapp.js.gz"
