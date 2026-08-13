@@ -185,7 +185,6 @@ const initialState = {
     wifiSsid: "NameTagNet",
     wifiHostname: "NameTagOS",
     wifiPassword: "",
-    text: "",
   },
   // client
   activeTab: "status",
@@ -288,6 +287,7 @@ const ReloadWindow = (state) => [state, reloadWindow];
 const ShowTab = (activeTab) => (state) => storeLocal({
   ...state,
   activeTab,
+  imageFile: undefined,
   firmwareImage: undefined,
   uploadProgress: undefined,
   uploadResult: undefined,
@@ -324,11 +324,6 @@ const UploadFinished = (state, event) => {
   ];
 };
 
-const SendTextInput = (state, event) => ([
-  DisableInputs(state),
-  [postRequest, ["api/text", {text: state.editstatus.text}, GotServerStatus]],
-]);
-
 // Preferences
 const hasDefaultValue = (state, key) => (
   state.editstatus[key] == undefined
@@ -354,6 +349,11 @@ const UploadFirmware = (state) => ([
   [uploadFile, ["update", state.firmwareImage, UploadProgress, UploadFinished]],
 ]);
 
+const UploadImage = (state) => ([
+  DisableInputs(state),
+  [uploadFile, ["api/image", state.imageFile, UploadProgress, UploadFinished]],
+]);
+
 
 const EditField = (key, parse) => (state, event) => storeLocal(SetEditField(state, key, parse(event.target.value)));
 
@@ -363,7 +363,7 @@ const EditText = (key) => EditField(key, (value) => value);
 const EditFile = (key) => (state, event) => {
   return storeLocal({
     ...state,
-    firmwareImage: event.target.files.length == 1 && event.target.files[0],
+    [key]: event.target.files.length == 1 && event.target.files[0],
   });
 };
 
@@ -465,12 +465,37 @@ app({
         ]),
 
         Fieldset("Display", [
-          InputField(state, "text", "Text:", TextInput({})),
+          InputField(state, "imageFile", "Image file (raw image):", (key, value) => h("input", {
+            type: "file",
+            accept: ".data,.raw",
+            oninput: EditFile(key),
+          })),
+        ]),
+
+        (state.uploadProgress || state.uploadResult) &&
+        Fieldset("Upload", [
+          state.uploadProgress &&
+          Field("Progress:", {}, [
+            h("progress", state.uploadProgress),
+          ]),
+
+          state.uploadResult &&
+          Field("Message:", {class: {
+            success: state.uploadResult.status == 200 && state.uploadResult.code == 0,
+            error: state.uploadResult.status != 200,
+            failure: state.uploadResult.code > 0,
+          }}, [
+            text(state.uploadResult.message ?? state.uploadResult.statusText),
+          ]),
         ]),
 
         h("div", {class: "actions"}, [
-          h("button", {onclick: SendTextInput, disabled: disableInputs}, text("Update")),
+          h("button", {
+            onclick: UploadImage,
+            disabled: disableInputs || !state.imageFile,
+          }, text("Upload image")),
         ]),
+
       ]), // </main> "status"
 
       activeTab == "prefs" && h('main', {}, [

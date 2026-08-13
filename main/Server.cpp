@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include "display.hpp"
 
 #include "Formatting.hpp"
 #include "HTTPUpdateServer.h"
@@ -11,11 +12,8 @@
 
 #include <freertos/task.h>
 
+#include <cstring>
 #include <optional>
-
-
-// extern
-extern void showText(String text);
 
 
 // Globals
@@ -28,13 +26,17 @@ extern const uint8_t static_index_html_end[]    asm("_binary_index_html_gz_end")
 extern const uint8_t static_hyperapp_js_start[] asm("_binary_hyperapp_js_gz_start");
 extern const uint8_t static_hyperapp_js_end[]   asm("_binary_hyperapp_js_gz_end");
 
+constexpr size_t maxUploadFileSize = EPD::WIDTH * EPD::HEIGHT * 4;
+uint8_t uploadFileBuffer[maxUploadFileSize];
+
 
 // Forward declarations
 void onHttpRoot();
 void onHttpHyperappJs();
 void onHttpFileEventsLog();
 void onHttpApiStatus();
-void onHttpApiText();
+void onHttpApiImage();
+void onHttpApiImageUpload();
 void onHttpApiServerReboot();
 void onHttpApiPrefsPost();
 void sendFile(int code, const char* content_type, const uint8_t* start, const uint8_t* end);
@@ -68,7 +70,7 @@ void initWebServer()
   server.on("/file/events.log", onHttpFileEventsLog);
   server.on("/api/status", onHttpApiStatus);
   server.on("/api/server/reboot", onHttpApiServerReboot);
-  server.on("/api/text", HTTPMethod::HTTP_POST, onHttpApiText);
+  server.on("/api/image", HTTPMethod::HTTP_POST, onHttpApiImage, onHttpApiImageUpload);
   server.on("/prefs", HTTPMethod::HTTP_POST, onHttpApiPrefsPost);
 
   updateServer.setup(&server, "/update");
@@ -123,12 +125,58 @@ void onHttpApiStatus()
   server.send(200, "application/json", (String&) response);
 }
 
-void onHttpApiText()
+void onHttpApiImage()
 {
-  String text = server.arg("text");
-  showText(text);
+    HTTPUpload& upload = server.upload();
 
-  onHttpApiStatus();
+    bool success = upload.totalSize == maxUploadFileSize;
+
+    StreamString message;
+    if (success) {
+        message << "Upload successful.";
+    }
+    else {
+        message << "Upload failed due to unexpected file size."
+            << "\nFile size must be " << maxUploadFileSize << " bytes."
+            << "\nReceived " << upload.totalSize << " bytes.";
+    }
+
+    StreamString response;
+    JsonWriter json(response);
+
+    json.put_object();
+    json.put_bool("success", success);
+    json.put_string("message", message);
+    json.end_object();
+    server.send(200, "application/json", (String&) response);
+
+    if (success) {
+        showImage(uploadFileBuffer, EPD::WIDTH, EPD::HEIGHT);
+    }
+}
+
+void onHttpApiImageUpload()
+{
+    HTTPUpload& upload = server.upload();
+    size_t start = 0;
+    size_t stop = 0;
+
+    switch (upload.status) {
+        case UPLOAD_FILE_START:
+            break;
+
+        case UPLOAD_FILE_WRITE:
+            start = std::min(maxUploadFileSize, upload.totalSize);
+            stop = std::min(maxUploadFileSize, upload.totalSize + upload.currentSize);
+            std::memcpy(uploadFileBuffer, upload.buf, stop - start);
+            break;
+
+        case UPLOAD_FILE_END:
+            break;
+
+        case UPLOAD_FILE_ABORTED:
+            break;
+    }
 }
 
 void onHttpApiServerReboot()

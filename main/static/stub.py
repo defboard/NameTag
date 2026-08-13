@@ -61,12 +61,6 @@ def api_status():
     return server_info()
 
 
-@app.route("/api/text", methods=['POST'])
-def api_text():
-    log("text: ", request.form["text"])
-    return server_info()
-
-
 @app.route("/api/server/reboot")
 def api_server_reboot():
     log("Reboot")
@@ -99,6 +93,19 @@ def prefs():
         log("wifiHostname =", wifiHostname)
 
     return server_info()
+
+
+@app.route("/api/image", methods=['POST'])
+def api_image():
+    data = request.form
+    file = request.files['file']
+    log("upload...", data, file, len(file.getvalue()))
+    messages = ['Done!', 'Internal failure!']
+    code = random.choice(range(len(messages)))
+    return {
+        "code": code,
+        "message": messages[code],
+    }
 
 
 @app.route("/update", methods=['POST'])

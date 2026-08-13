@@ -1,13 +1,11 @@
+#include "display.hpp"
+
 #include "Formatting.hpp"
 #include "Server.hpp"
 #include "System.hpp"
 #include "Wifi.hpp"
 
 #include <Arduino.h>
-
-#include <Adafruit_GFX.h>
-#include <Fonts/FreeMonoBold9pt7b.h>
-#include <GxEPD2_3C.h>
 
 
 // pin definitions
@@ -24,23 +22,17 @@ const uint8_t EPD_BUSY = 14;
 
 
 // devices
-typedef GxEPD2_290_C90c EPD;
-
-GxEPD2_3C<EPD, EPD::HEIGHT> display(EPD(EPD_SS, EPD_DC, EPD_RST, EPD_BUSY));
+EPD epd(EPD_SS, EPD_DC, EPD_RST, EPD_BUSY);
 
 
 void setup()
 {
   Serial.begin(115200);
 
-#if 0
-  SPI.setSCK(EPD_SCK);
-  SPI.setTX(EPD_SDI);
-#else
+  // Display
   SPI.begin(EPD_SCK, SPI_MISO, EPD_SDI, EPD_SS);
-#endif
-  display.init();
-  display.hibernate();
+  epd.init();
+  epd.hibernate();
 
   // Load saved settings
   if (digitalRead(PIN_BTN_RESET) == HIGH)
@@ -57,37 +49,55 @@ void setup()
   initWebServer();
 }
 
-
 void loop()
 {
     delay(10);
 }
 
 
-void showText(String text)
+constexpr size_t BUFSIZE = EPD::WIDTH * EPD::HEIGHT / 8;
+uint8_t px_black[BUFSIZE];
+uint8_t px_color[BUFSIZE];
+
+
+void showImage(
+        const uint8_t* pixel_data,
+        size_t width,
+        size_t height,
+        uint8_t threshold)
 {
-    Serial << "Text: " << text << endl;
+    for (size_t y = 0; y < EPD::HEIGHT; ++y)
+    {
+        for (size_t x8 = 0; x8 < EPD::WIDTH / 8; ++x8)
+        {
+            uint8_t red   = 0;
+            uint8_t green = 0;
+            uint8_t blue  = 0;
+            uint8_t alpha = 0;
 
-  display.setRotation(3);
-  display.setFont(&FreeMonoBold9pt7b);
-  display.setTextSize(2, 2);
-  display.setTextColor(GxEPD_BLACK);
+            for (int s = 0; s < 8; ++s)
+            {
+                const size_t x = x8 * 8 + s;
+                const size_t j = x * EPD::HEIGHT + y;
 
-  int16_t tbx, tby;
-  uint16_t tbw, tbh;
-  display.getTextBounds(text, 0, 0, &tbx, &tby, &tbw, &tbh);
-  uint16_t x = ((display.width() - tbw) / 2) - tbx;
-  uint16_t y = ((display.height() - tbh) / 2) - tby;
+                if (x < width and y < height) {
+                    red   |= (pixel_data[4 * j + 0] > threshold) << (7 - s);
+                    green |= (pixel_data[4 * j + 1] > threshold) << (7 - s);
+                    blue  |= (pixel_data[4 * j + 2] > threshold) << (7 - s);
+                    alpha |= (pixel_data[4 * j + 3] > threshold) << (7 - s);
+                }
+            }
 
-  display.setFullWindow();
-  display.firstPage();
-  do {
-    display.fillScreen(GxEPD_RED);
-    const int margin = 8;
-    display.fillRoundRect(x - margin, y - tbh - margin, tbw + 2*margin, tbh + 2*margin, 4, GxEPD_WHITE);
-    display.setCursor(x, y);
-    display.print(text);
-  } while (display.nextPage());
+            const uint8_t white = (red & green & blue) | ~alpha;
+            const uint8_t color = (red | green | blue) & ~white;
+            const uint8_t black = ~white & ~color;
 
-  display.hibernate();
+            const size_t i = (EPD::HEIGHT - y - 1) * EPD::WIDTH / 8 + x8;
+
+            px_black[i] = ~black;
+            px_color[i] = ~color;
+        }
+    }
+
+    epd.drawImage(px_black, px_color, 0, 0, EPD::WIDTH, EPD::HEIGHT);
 }
