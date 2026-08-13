@@ -27,7 +27,8 @@ extern const uint8_t static_hyperapp_js_start[] asm("_binary_hyperapp_js_gz_star
 extern const uint8_t static_hyperapp_js_end[]   asm("_binary_hyperapp_js_gz_end");
 
 constexpr size_t maxUploadFileSize = EPD::WIDTH * EPD::HEIGHT * 4;
-uint8_t uploadFileBuffer[maxUploadFileSize];
+uint8_t uploadFileBuffer[maxUploadFileSize / 4];
+uint8_t colorThreshold = 127;
 
 
 // Forward declarations
@@ -158,17 +159,21 @@ void onHttpApiImage()
 void onHttpApiImageUpload()
 {
     HTTPUpload& upload = server.upload();
-    size_t start = 0;
-    size_t stop = 0;
+    size_t pos = 0;
+    size_t end = 0;
 
     switch (upload.status) {
         case UPLOAD_FILE_START:
+            std::memset(uploadFileBuffer, 0, sizeof(uploadFileBuffer));
             break;
 
         case UPLOAD_FILE_WRITE:
-            start = std::min(maxUploadFileSize, upload.totalSize);
-            stop = std::min(maxUploadFileSize, upload.totalSize + upload.currentSize);
-            std::memcpy(uploadFileBuffer, upload.buf, stop - start);
+            pos = std::min(maxUploadFileSize, upload.totalSize);
+            end = std::min(maxUploadFileSize, upload.totalSize + upload.currentSize);
+            for (size_t i = 0; pos < end; ++pos, ++i) {
+                bool bit = ((uint8_t) upload.buf[i]) > colorThreshold;
+                uploadFileBuffer[pos / 4] |= bit << (pos % 4);
+            }
             break;
 
         case UPLOAD_FILE_END:

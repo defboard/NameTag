@@ -63,8 +63,7 @@ uint8_t px_color[BUFSIZE];
 void showImage(
         const uint8_t* pixel_data,
         size_t width,
-        size_t height,
-        uint8_t threshold)
+        size_t height)
 {
     for (size_t y = 0; y < EPD::HEIGHT; ++y)
     {
@@ -81,10 +80,10 @@ void showImage(
                 const size_t j = x * EPD::HEIGHT + y;
 
                 if (x < width and y < height) {
-                    red   |= (pixel_data[4 * j + 0] > threshold) << (7 - s);
-                    green |= (pixel_data[4 * j + 1] > threshold) << (7 - s);
-                    blue  |= (pixel_data[4 * j + 2] > threshold) << (7 - s);
-                    alpha |= (pixel_data[4 * j + 3] > threshold) << (7 - s);
+                    red   |= ((pixel_data[j] & 1) >> 0) << (7 - s);
+                    green |= ((pixel_data[j] & 2) >> 1) << (7 - s);
+                    blue  |= ((pixel_data[j] & 4) >> 2) << (7 - s);
+                    alpha |= ((pixel_data[j] & 8) >> 3) << (7 - s);
                 }
             }
 
