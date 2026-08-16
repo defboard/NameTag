@@ -53,6 +53,8 @@ def server_info():
         "wifiMode": state.wifiMode,
         "wifiSsid": state.wifiSsid,
         "wifiHostname": state.wifiHostname,
+        "displayWidth": 296,
+        "displayHeight": 128,
     }
 
 

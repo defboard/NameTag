@@ -121,6 +121,10 @@ void onHttpApiStatus()
   json.put_string("wifiMode", dumpWifiMode(WIFI_MODE));
   json.put_string("wifiSsid", WIFI_SSID);
   json.put_string("wifiHostname", WIFI_HOSTNAME);
+  // WIDTH and HEIGHT are switched because EPD assumes the display is used
+  // in portrait mode, while I prefer landscape:
+  json.put_plain("displayWidth", (int) EPD::HEIGHT);
+  json.put_plain("displayHeight", (int) EPD::WIDTH);
   json.end_object();
 
   server.send(200, "application/json", (String&) response);

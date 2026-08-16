@@ -55,6 +55,14 @@ nav > div.active:hover {
 main {
 }
 
+img.preview {
+  /* aspect-ratio: 296 / 128; */
+  border: 1px solid blue;
+  display: block;
+  margin: auto;
+  /* width: max(100%, 296px); */
+}
+
 fieldset {
   padding: 0px 3px 3px 3px; /* t r b l */
   margin-top: 5px;
@@ -175,6 +183,80 @@ const JSON_safeParse = (text) => {
   }
 }
 
+const transformColors = (pixelData) => {
+  for (let i = 0; i < pixelData.length; i += 4) {
+    const red   = pixelData[i + 0] > 127;
+    const green = pixelData[i + 1] > 127;
+    const blue  = pixelData[i + 2] > 127;
+    const alpha = pixelData[i + 3] > 127;
+
+    const white = (red && green && blue) || !alpha;
+    const color = (red || green || blue) && !white;
+    const black = !white && !color;
+
+    if (white) {
+      pixelData[i + 0] = 0xff;
+      pixelData[i + 1] = 0xff;
+      pixelData[i + 2] = 0xff;
+      pixelData[i + 3] = 0xff;
+    }
+    else if (color) {
+      pixelData[i + 0] = 0xff;
+      pixelData[i + 1] = 0x00;
+      pixelData[i + 2] = 0x00;
+      pixelData[i + 3] = 0xff;
+    }
+    else {
+      pixelData[i + 0] = 0x00;
+      pixelData[i + 1] = 0x00;
+      pixelData[i + 2] = 0x00;
+      pixelData[i + 3] = 0xff;
+    }
+  }
+  return pixelData;
+};
+
+const renderImage = async function (dataURL, width, height) {
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const image = await new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = (e) => resolve(e.target);
+    image.onerror = (e) => reject("Failed to load Image from DataURL");
+    image.src = dataURL;
+  });
+
+  const context = canvas.getContext("2d");
+  context.drawImage(
+    image,
+    0, 0, image.naturalWidth, image.naturalHeight,
+    0, 0, canvas.width, canvas.height);
+
+  const settings = { pixelFormat: "rgba-unorm8" };
+  const imageData = context.getImageData(0, 0, width, height, settings);
+  const pixelData = imageData.data;
+
+  transformColors(pixelData);
+
+  context.putImageData(imageData, 0, 0);
+
+  const imageURL = canvas.toDataURL();
+  const imageBlob = new Blob([pixelData]);
+
+  return {imageURL, imageBlob}
+};
+
+const readAsDataURL = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (e) => resolve(e.target.result);
+  reader.onerror = (e) => reject("Failed to load DataURL from File");
+  reader.readAsDataURL(file);
+});
+
+
 // Local storage
 
 const storageKey = 'NameTagOS';
@@ -185,10 +267,16 @@ const initialState = {
     wifiSsid: "NameTagNet",
     wifiHostname: "NameTagOS",
     wifiPassword: "",
+    displayWidth: 296,
+    displayHeight: 128,
   },
   // client
   activeTab: "status",
   editstatus: {},
+  sourceImageURL: null,
+  sourceImageName: null,
+  imageURL: null,
+  imageBlob: null,
 };
 updateRecursive(initialState, savedState);
 updateRecursive(initialState, {
@@ -199,6 +287,8 @@ const storeLocal = (state) => {
   localStorage.setItem(storageKey, JSON.stringify({
     activeTab: state.activeTab,
     serverstatus: state.serverstatus,
+    sourceImageURL: state.sourceImageURL,
+    sourceImageName: state.sourceImageName,
   }));
   return UpdateUI(state);
 };
@@ -221,7 +311,7 @@ const postRequest = (dispatch, [url, data, action]) => {
   .then(data => dispatch(action, data))
 };
 
-const uploadFile = (dispatch, [url, file, progressAction, finishAction]) => {
+const uploadFile = (dispatch, [url, file, name, progressAction, finishAction]) => {
   const request = new XMLHttpRequest();
   request.open("POST", url);
   request.upload.onprogress = (event) => dispatch(progressAction, event);
@@ -231,8 +321,19 @@ const uploadFile = (dispatch, [url, file, progressAction, finishAction]) => {
     }
   };
   const form = new FormData();
-  form.append("file", file, file.name),
+  form.append("file", file, name),
   request.send(form);
+};
+
+const setSourceImageFile = (dispatch, [file]) => {
+  readAsDataURL(file)
+  .then(dataURL => dispatch(SetSourceImageURL, [dataURL, file.name]))
+};
+
+const setSourceImageURL = (dispatch, [sourceImageURL, state]) => {
+  const {displayWidth, displayHeight} = state.serverstatus;
+  renderImage(sourceImageURL, displayWidth, displayHeight)
+  .then(result => dispatch(SetImageData, result));
 };
 
 const timeout = (dispatch, [delay, action]) => {
@@ -264,6 +365,9 @@ const GotServerStatus = (state, serverstatus) => {
       },
     }),
     [timeout, [DISABLE_TIMEOUT, EnableInputs]],
+
+    initialState.sourceImageURL &&
+    [setSourceImageURL, [initialState.sourceImageURL, initialState]],
   ];
 };
 
@@ -287,7 +391,6 @@ const ReloadWindow = (state) => [state, reloadWindow];
 const ShowTab = (activeTab) => (state) => storeLocal({
   ...state,
   activeTab,
-  imageFile: undefined,
   firmwareImage: undefined,
   uploadProgress: undefined,
   uploadResult: undefined,
@@ -324,6 +427,21 @@ const UploadFinished = (state, event) => {
   ];
 };
 
+const SetSourceImageURL = (state, [sourceImageURL, sourceImageName]) => [
+  storeLocal({
+    ...state,
+    sourceImageURL,
+    sourceImageName,
+  }),
+  [setSourceImageURL, [sourceImageURL, state]],
+];
+
+const SetImageData = (state, {imageURL, imageBlob}) => storeLocal({
+  ...state,
+  imageURL,
+  imageBlob,
+});
+
 // Preferences
 const hasDefaultValue = (state, key) => (
   state.editstatus[key] == undefined
@@ -346,12 +464,12 @@ const PrefsRestore = (state) => storeLocal({...state, editstatus: {}});
 
 const UploadFirmware = (state) => ([
   DisableInputs(state),
-  [uploadFile, ["update", state.firmwareImage, UploadProgress, UploadFinished]],
+  [uploadFile, ["update", state.firmwareImage, state.firmwareImage.name, UploadProgress, UploadFinished]],
 ]);
 
 const UploadImage = (state) => ([
   DisableInputs(state),
-  [uploadFile, ["api/image", state.imageFile, UploadProgress, UploadFinished]],
+  [uploadFile, ["api/image", state.imageBlob, state.sourceImageName, UploadProgress, UploadFinished]],
 ]);
 
 
@@ -365,6 +483,17 @@ const EditFile = (key) => (state, event) => {
     ...state,
     [key]: event.target.files.length == 1 && event.target.files[0],
   });
+};
+
+const EditImage = (key) => (state, event) => {
+  const file = event.target.files.length == 1 && event.target.files[0];
+  return [
+    storeLocal({
+      ...state,
+      [key]: file,
+    }),
+    [setSourceImageFile, [file]],
+  ];
 };
 
 
@@ -465,12 +594,20 @@ app({
         ]),
 
         Fieldset("Display", [
-          InputField(state, "imageFile", "Image file (raw image):", (key, value) => h("input", {
+          InputField(state, "imageFile", "Image file:", (key, value) => h("input", {
             type: "file",
-            accept: ".data,.raw",
-            oninput: EditFile(key),
+            accept: "image/*",
+            oninput: EditImage(key),
           })),
         ]),
+
+        state.imageURL &&
+        h("img", {
+          class: "preview",
+          src: state.imageURL,
+          width: 2 * serverstatus.displayWidth,
+          height: 2 * serverstatus.displayHeight,
+        }),
 
         (state.uploadProgress || state.uploadResult) &&
         Fieldset("Upload", [
@@ -492,7 +629,7 @@ app({
         h("div", {class: "actions"}, [
           h("button", {
             onclick: UploadImage,
-            disabled: disableInputs || !state.imageFile,
+            disabled: disableInputs || !state.imageBlob,
           }, text("Upload image")),
         ]),
 
