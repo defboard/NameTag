@@ -287,8 +287,10 @@ const storeLocal = (state) => {
   localStorage.setItem(storageKey, JSON.stringify({
     activeTab: state.activeTab,
     serverstatus: state.serverstatus,
-    sourceImageURL: state.sourceImageURL,
-    sourceImageName: state.sourceImageName,
+    // The quoto for localStorage is 5MiB per origin. We restrict to 4.5MB to
+    // have some leeway for other settings:
+    sourceImageURL: state.sourceImageURL?.length >= 4_500_000 ? null : state.sourceImageURL,
+    sourceImageName: state.sourceImageURL?.length >= 4_500_000 ? null : state.sourceImageName,
   }));
   return UpdateUI(state);
 };
