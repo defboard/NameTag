@@ -281,7 +281,7 @@ const initialState = {
   sourceImageName: null,
   imageURL: null,
   imageBlob: null,
-  imageSettings: defaultSettings,
+  imageSettings: { ...defaultSettings },
 };
 updateRecursive(initialState, savedState);
 updateRecursive(initialState, {
