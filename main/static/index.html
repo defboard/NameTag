@@ -262,8 +262,8 @@ const readAsDataURL = (file) => new Promise((resolve, reject) => {
 const storageKey = 'NameTagOS';
 const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
 const defaultSettings = {
-  xZoom: 1,
-  yZoom: 1,
+  xZoom: 50,
+  yZoom: 50,
   xOffset: 0,
   yOffset: 0,
 };
@@ -308,6 +308,7 @@ const rerenderImage = (state) => [
   state.sourceImageURL && [setSourceImageURL, [state.sourceImageURL, state]],
 ];
 
+const zoomFactor = (step) => Math.exp((step - 50) / 25);
 
 // Effects
 
@@ -348,7 +349,14 @@ const setSourceImageFile = (dispatch, [file]) => {
 const setSourceImageURL = (dispatch, [sourceImageURL, state]) => {
   const {displayWidth, displayHeight} = state.serverstatus;
   const {xZoom, yZoom, xOffset, yOffset} = state.imageSettings;
-  renderImage(sourceImageURL, displayWidth, displayHeight, xZoom, yZoom, xOffset, yOffset)
+  renderImage(
+    sourceImageURL,
+    displayWidth,
+    displayHeight,
+    zoomFactor(xZoom),
+    zoomFactor(yZoom),
+    xOffset,
+    yOffset)
   .then(result => dispatch(SetImageData, result));
 };
 
@@ -526,7 +534,7 @@ const EditZoom = (xy) => (state, event) => {
     // center pixel must stay the same before/after change of zoom:
     //        (w/2 - dx) / sx = (w/2 - dx') / sx
     // or:    (h/2 - dy) / sy = (h/2 - dy') / sy
-    newZoom / oldZoom * (oldOffset - centerPos) + centerPos
+    zoomFactor(newZoom) / zoomFactor(oldZoom) * (oldOffset - centerPos) + centerPos
   );
   return rerenderImage(storeLocal({
     ...state,
@@ -640,9 +648,9 @@ app({
           state.imageURL &&
           Field("X-zoom:", {}, h("input", {
             type: "range",
-            min: 0.01,
-            max: 4.99,
-            step: 0.01,
+            min: 0,
+            max: 100,
+            step: 1,
             value: state.imageSettings.xZoom,
             oninput: EditZoom("x"),
           })),
@@ -650,9 +658,9 @@ app({
           state.imageURL &&
           Field("Y-zoom:", {}, h("input", {
             type: "range",
-            min: 0.01,
-            max: 4.99,
-            step: 0.01,
+            min: 0,
+            max: 100,
+            step: 1,
             value: state.imageSettings.yZoom,
             oninput: EditZoom("y"),
           })),
