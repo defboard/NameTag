@@ -216,7 +216,7 @@ const transformColors = (pixelData) => {
   return pixelData;
 };
 
-const renderImage = async function (dataURL, width, height) {
+const renderImage = async function (dataURL, width, height, sx, sy) {
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -233,7 +233,7 @@ const renderImage = async function (dataURL, width, height) {
   context.drawImage(
     image,
     0, 0, image.naturalWidth, image.naturalHeight,
-    0, 0, canvas.width, canvas.height);
+    0, 0, canvas.width * sx, canvas.height * sy);
 
   const settings = { pixelFormat: "rgba-unorm8" };
   const imageData = context.getImageData(0, 0, width, height, settings);
@@ -261,6 +261,10 @@ const readAsDataURL = (file) => new Promise((resolve, reject) => {
 
 const storageKey = 'NameTagOS';
 const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
+const defaultSettings = {
+  xZoom: 1,
+  yZoom: 1,
+};
 const initialState = {
   serverstatus: {
     wifiMode: "STA",
@@ -277,6 +281,7 @@ const initialState = {
   sourceImageName: null,
   imageURL: null,
   imageBlob: null,
+  imageSettings: defaultSettings,
 };
 updateRecursive(initialState, savedState);
 updateRecursive(initialState, {
@@ -291,6 +296,7 @@ const storeLocal = (state) => {
     // have some leeway for other settings:
     sourceImageURL: state.sourceImageURL?.length >= 4_500_000 ? null : state.sourceImageURL,
     sourceImageName: state.sourceImageURL?.length >= 4_500_000 ? null : state.sourceImageName,
+    imageSettings: state.imageSettings,
   }));
   return UpdateUI(state);
 };
@@ -339,7 +345,8 @@ const setSourceImageFile = (dispatch, [file]) => {
 
 const setSourceImageURL = (dispatch, [sourceImageURL, state]) => {
   const {displayWidth, displayHeight} = state.serverstatus;
-  renderImage(sourceImageURL, displayWidth, displayHeight)
+  const {xZoom, yZoom} = state.imageSettings;
+  renderImage(sourceImageURL, displayWidth, displayHeight, xZoom, yZoom)
   .then(result => dispatch(SetImageData, result));
 };
 
@@ -465,6 +472,11 @@ const PrefsSave = (state, event) => ([
 
 const PrefsRestore = (state) => storeLocal({...state, editstatus: {}});
 
+const ResetSettings = (state) => rerenderImage(storeLocal({
+    ...state,
+    imageSettings: defaultSettings,
+}));
+
 const UploadFirmware = (state) => ([
   DisableInputs(state),
   [uploadFile, ["update", state.firmwareImage, state.firmwareImage.name, UploadProgress, UploadFinished]],
@@ -498,6 +510,14 @@ const EditImage = (key) => (state, event) => {
     [setSourceImageFile, [file]],
   ];
 };
+
+const EditImageNumber = (key) => (state, event) => rerenderImage(storeLocal({
+    ...state,
+    imageSettings: {
+      ...state.imageSettings,
+      [key]: event.target.value,
+    },
+}));
 
 
 // UI components
@@ -602,6 +622,27 @@ app({
             accept: "image/*",
             oninput: EditImage(key),
           })),
+
+          state.imageURL &&
+          Field("X-zoom:", {}, h("input", {
+            type: "range",
+            min: 0.01,
+            max: 4.99,
+            step: 0.01,
+            value: state.imageSettings.xZoom,
+            oninput: EditImageNumber("xZoom"),
+          })),
+
+          state.imageURL &&
+          Field("Y-zoom:", {}, h("input", {
+            type: "range",
+            min: 0.01,
+            max: 4.99,
+            step: 0.01,
+            value: state.imageSettings.yZoom,
+            oninput: EditImageNumber("yZoom"),
+          })),
+
         ]),
 
         state.imageURL &&
@@ -630,6 +671,11 @@ app({
         ]),
 
         h("div", {class: "actions"}, [
+          h("button", {
+            onclick: ResetSettings,
+            disabled: disableInputs || !state.imageBlob,
+          }, text("Reset settings")),
+
           h("button", {
             onclick: UploadImage,
             disabled: disableInputs || !state.imageBlob,
