@@ -216,7 +216,7 @@ const transformColors = (pixelData) => {
   return pixelData;
 };
 
-const renderImage = async function (dataURL, width, height, sx, sy) {
+const renderImage = async function (dataURL, width, height, sx, sy, dx, dy) {
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -233,7 +233,7 @@ const renderImage = async function (dataURL, width, height, sx, sy) {
   context.drawImage(
     image,
     0, 0, image.naturalWidth, image.naturalHeight,
-    0, 0, canvas.width * sx, canvas.height * sy);
+    dx, dy, canvas.width * sx, canvas.height * sy);
 
   const settings = { pixelFormat: "rgba-unorm8" };
   const imageData = context.getImageData(0, 0, width, height, settings);
@@ -264,6 +264,8 @@ const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
 const defaultSettings = {
   xZoom: 1,
   yZoom: 1,
+  xOffset: 0,
+  yOffset: 0,
 };
 const initialState = {
   serverstatus: {
@@ -345,8 +347,8 @@ const setSourceImageFile = (dispatch, [file]) => {
 
 const setSourceImageURL = (dispatch, [sourceImageURL, state]) => {
   const {displayWidth, displayHeight} = state.serverstatus;
-  const {xZoom, yZoom} = state.imageSettings;
-  renderImage(sourceImageURL, displayWidth, displayHeight, xZoom, yZoom)
+  const {xZoom, yZoom, xOffset, yOffset} = state.imageSettings;
+  renderImage(sourceImageURL, displayWidth, displayHeight, xZoom, yZoom, xOffset, yOffset)
   .then(result => dispatch(SetImageData, result));
 };
 
@@ -511,13 +513,30 @@ const EditImage = (key) => (state, event) => {
   ];
 };
 
-const EditImageNumber = (key) => (state, event) => rerenderImage(storeLocal({
+const EditZoom = (xy) => (state, event) => {
+  const zoomKey = `${xy}Zoom`;
+  const offsetKey = `${xy}Offset`;
+  const sizeKey = xy == "x" ? "displayWidth" : "displayHeight"
+  const centerPos = state.serverstatus[sizeKey] / 2;
+  const oldZoom = state.imageSettings[zoomKey];
+  const oldOffset = state.imageSettings[offsetKey];
+  const newZoom = event.target.value;
+  const newOffset = (
+    // We zoom relative to the center of the currently visible area, i.e. the
+    // center pixel must stay the same before/after change of zoom:
+    //        (w/2 - dx) / sx = (w/2 - dx') / sx
+    // or:    (h/2 - dy) / sy = (h/2 - dy') / sy
+    newZoom / oldZoom * (oldOffset - centerPos) + centerPos
+  );
+  return rerenderImage(storeLocal({
     ...state,
     imageSettings: {
       ...state.imageSettings,
-      [key]: event.target.value,
+      [zoomKey]: newZoom,
+      [offsetKey]: newOffset,
     },
-}));
+  }));
+};
 
 
 // UI components
@@ -625,7 +644,7 @@ app({
             max: 4.99,
             step: 0.01,
             value: state.imageSettings.xZoom,
-            oninput: EditImageNumber("xZoom"),
+            oninput: EditZoom("x"),
           })),
 
           state.imageURL &&
@@ -635,7 +654,7 @@ app({
             max: 4.99,
             step: 0.01,
             value: state.imageSettings.yZoom,
-            oninput: EditImageNumber("yZoom"),
+            oninput: EditZoom("y"),
           })),
 
         ]),
