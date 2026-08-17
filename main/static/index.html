@@ -295,6 +295,11 @@ const storeLocal = (state) => {
   return UpdateUI(state);
 };
 
+const rerenderImage = (state) => [
+  state,
+  state.sourceImageURL && [setSourceImageURL, [state.sourceImageURL, state]],
+];
+
 
 // Effects
 
@@ -359,17 +364,14 @@ const RELOAD_TIMEOUT = 10_000;
 
 const GotServerStatus = (state, serverstatus) => {
   return [
-    storeLocal({
+    ...rerenderImage(storeLocal({
       ...state,
       serverstatus: {
         ...state.serverstatus,
         ...serverstatus,
       },
-    }),
+    })),
     [timeout, [DISABLE_TIMEOUT, EnableInputs]],
-
-    initialState.sourceImageURL &&
-    [setSourceImageURL, [initialState.sourceImageURL, initialState]],
   ];
 };
 
@@ -430,12 +432,11 @@ const UploadFinished = (state, event) => {
 };
 
 const SetSourceImageURL = (state, [sourceImageURL, sourceImageName]) => [
-  storeLocal({
+  ...rerenderImage(storeLocal({
     ...state,
     sourceImageURL,
     sourceImageName,
-  }),
-  [setSourceImageURL, [sourceImageURL, state]],
+  })),
 ];
 
 const SetImageData = (state, {imageURL, imageBlob}) => storeLocal({
