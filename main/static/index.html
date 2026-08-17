@@ -606,17 +606,12 @@ app({
       h("h1", {}, text("NameTagOS")),
 
       h("nav", {}, [
-        NavButton(state, "status", "Status"),
-        NavButton(state, "prefs", "Preferences"),
-        NavButton(state, "update", "Update"),
+        NavButton(state, "status", "Display"),
+        NavButton(state, "prefs", "System"),
       ]),
 
       activeTab == "status" && h('main', {}, [
-        Fieldset("Host device", [
-          Field("System events:",      {}, HyperRef("file/events.log", "events.log")),
-        ]),
-
-        Fieldset("Display", [
+        Fieldset("Image", [
           InputField(state, "imageFile", "Image file:", (key, value) => h("input", {
             type: "file",
             accept: "image/*",
@@ -685,6 +680,9 @@ app({
       ]), // </main> "status"
 
       activeTab == "prefs" && h('main', {}, [
+        Fieldset("Host device", [
+          Field("System events:",      {}, HyperRef("file/events.log", "events.log")),
+        ]),
 
         Fieldset("WiFi settings", [
           InputField(state, "wifiMode", "Connection mode:", RadioList("wifiMode", [
@@ -701,9 +699,6 @@ app({
           h("button", {onclick: PrefsSave, disabled: disableInputs}, text("Save")),
           h("button", {onclick: PrefsRestore, disabled: disableInputs}, text("Restore")),
         ]),
-      ]), // </main> "prefs"
-
-      activeTab == "update" && h('main', {}, [
 
         Fieldset("Firmware", [
           InputField(state, "firmwareImage", "Firmware image:", (key, value) => h("input", {
