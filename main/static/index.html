@@ -156,9 +156,6 @@ dt.error, dd.error {
 
 import { h, text, app } from "./hyperapp.js"
 
-const SECONDS_PER_DAY = 3600 * 24;
-const SECONDS_PER_HOUR = 3600;
-
 const updateRecursive = (a, b) => {
   for (const key in b) {
     if (typeof(a[key]) == "object" && !Array.isArray(a[key]) &&
@@ -512,10 +509,6 @@ const SetImageData = (state, {imageURL, imageBlob, ...imageSettings}) => storeLo
 });
 
 // Preferences
-const hasDefaultValue = (state, key) => (
-  state.editstatus[key] == undefined
-);
-
 const SetEditField = (state, key, value) => ({
   ...state,
   editstatus: {
@@ -549,7 +542,6 @@ const UploadImage = (state) => ([
 
 const EditField = (key, parse) => (state, event) => storeLocal(SetEditField(state, key, parse(event.target.value)));
 
-const EditNumber = (key, multiplier) => EditField(key, (value) => Math.round(value * (multiplier ?? 1)));
 const EditText = (key) => EditField(key, (value) => value);
 
 const EditFile = (key) => (state, event) => {
@@ -679,17 +671,6 @@ const TextInput = (props) => (key, value) => h("input", {
   oninput: EditText(key),
   ...props,
 });
-
-const NumberInput = (props, multiplier, unitName) => (key, value) => [
-  h("input", {
-    type: "number",
-    value: value / multiplier,
-    oninput: EditNumber(key, multiplier),
-    ...props,
-  }),
-  unitName &&
-  h("span", {}, text(unitName)),
-];
 
 const RadioList = (name, items, action, sep) => (key, value) => (
   items.flatMap((item, idx) => [
