@@ -216,21 +216,25 @@ const transformColors = (pixelData) => {
   return pixelData;
 };
 
-const renderImage = async function (dataURL, width, height, aspectPreset, aspectRatio, zoom, xOffset, yOffset) {
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
+const createImageBitmapFromDataURL = async function (dataURL) {
   const image = await new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = (e) => resolve(e.target);
     image.onerror = (e) => reject("Failed to load Image from DataURL");
     image.src = dataURL;
   });
+  const bitmap = await window.createImageBitmap(image);
+  return bitmap;
+};
 
-  const naturalWidth = image.naturalWidth;
-  const naturalHeight = image.naturalHeight;
+const renderImage = async function (image, width, height, aspectPreset, aspectRatio, zoom, xOffset, yOffset) {
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const naturalWidth = image.width;
+  const naturalHeight = image.height;
 
   if (aspectPreset === "picture") {
     aspectRatio = naturalWidth / naturalHeight;
@@ -315,6 +319,7 @@ const initialState = {
   sourceImageName: null,
   imageURL: null,
   imageBlob: null,
+  imageBitmap: null,
   imageSettings: { ...defaultSettings },
 };
 updateRecursive(initialState, savedState);
@@ -337,7 +342,8 @@ const storeLocal = (state) => {
 
 const rerenderImage = (state) => [
   state,
-  state.sourceImageURL && [setSourceImageURL, [state.sourceImageURL, state]],
+  state.sourceImageBitmap &&
+  [renderImageFromBitmap, state],
 ];
 
 const zoomFactor = (step) => Math.exp((step - 50) / 25);
@@ -375,17 +381,23 @@ const uploadFile = (dispatch, [url, file, name, progressAction, finishAction]) =
   request.send(form);
 };
 
-const setSourceImageFile = (dispatch, [file]) => {
+const renderImageFromFile = (dispatch, [file]) => {
   readAsDataURL(file)
   .then(dataURL => dispatch(SetSourceImageURL, [dataURL, file.name]))
 };
 
-const setSourceImageURL = (dispatch, [sourceImageURL, state]) => {
+const renderImageFromURL = (dispatch, [sourceImageURL, state]) => {
+  createImageBitmapFromDataURL(sourceImageURL)
+  .then(result => dispatch(SetSourceImageBitmap, result));
+};
+
+const renderImageFromBitmap = (dispatch, state) => {
+  const {sourceImageBitmap} = state;
   const {displayWidth, displayHeight} = state.serverstatus;
   const {zoom, xOffset, yOffset} = state.imageSettings;
   const {aspectPreset, aspectRatio} = state.imageSettings;
   renderImage(
-    sourceImageURL,
+    sourceImageBitmap,
     displayWidth,
     displayHeight,
     aspectPreset,
@@ -485,12 +497,18 @@ const UploadFinished = (state, event) => {
 };
 
 const SetSourceImageURL = (state, [sourceImageURL, sourceImageName]) => [
-  ...rerenderImage(storeLocal({
+  storeLocal({
     ...state,
     sourceImageURL,
     sourceImageName,
-  })),
+  }),
+  [renderImageFromURL, [sourceImageURL, state]],
 ];
+
+const SetSourceImageBitmap = (state, sourceImageBitmap) => rerenderImage({
+  ...state,
+  sourceImageBitmap,
+});
 
 const SetImageData = (state, {imageURL, imageBlob, ...imageSettings}) => storeLocal({
   ...state,
@@ -557,7 +575,7 @@ const EditImage = (key) => (state, event) => {
       ...state,
       [key]: file,
     }),
-    [setSourceImageFile, [file]],
+    [renderImageFromFile, [file]],
   ];
 };
 
@@ -674,6 +692,9 @@ const NavButton = (state, name, label) => {
   }, text(label));
 };
 
+if (initialState.sourceImageURL) {
+  initialState.sourceImageBitmap = await createImageBitmapFromDataURL(initialState.sourceImageURL);
+}
 
 app({
   init: [
