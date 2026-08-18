@@ -183,20 +183,19 @@ const JSON_safeParse = (text) => {
   }
 }
 
-const transformColors = (pixelData) => {
+const transformColors = (pixelData, threshold) => {
   for (let i = 0; i < pixelData.length; i += 4) {
-    const red   = pixelData[i + 0] > 127;
-    const green = pixelData[i + 1] > 127;
-    const blue  = pixelData[i + 2] > 127;
-    const alpha = pixelData[i + 3] > 127;
+    const red   = pixelData[i + 0] >= threshold;
+    const green = pixelData[i + 1] >= threshold;
+    const blue  = pixelData[i + 2] >= threshold;
 
     const white = (red && green && blue);
     const color = (red || green || blue);
 
-    pixelData[i + 0] = white || color ? 0xff : 0x00;
-    pixelData[i + 1] = white          ? 0xff : 0x00;
-    pixelData[i + 2] = white          ? 0xff : 0x00;
-    pixelData[i + 3] = alpha          ? 0xff : 0x00;
+    pixelData[i + 0] = color ? 0xff : 0x00;
+    pixelData[i + 1] = white ? 0xff : 0x00;
+    pixelData[i + 2] = white ? 0xff : 0x00;
+    pixelData[i + 3] = 0xff;
   }
   return pixelData;
 };
@@ -220,6 +219,7 @@ const renderImage = async function (image, width, height, imageSettings) {
     zoom,
     xOffset,
     yOffset,
+    colorThreshold,
   } = imageSettings;
   zoom = zoomFactor(zoom);
 
@@ -246,6 +246,7 @@ const renderImage = async function (image, width, height, imageSettings) {
   const context = canvas.getContext("2d");
   context.fillStyle = backgroundColor;
   context.fillRect(0, 0, width, height);
+
   context.drawImage(
     image,
     0, 0, naturalWidth, naturalHeight,
@@ -255,7 +256,7 @@ const renderImage = async function (image, width, height, imageSettings) {
   const imageData = context.getImageData(0, 0, width, height, settings);
   const pixelData = imageData.data;
 
-  transformColors(pixelData);
+  transformColors(pixelData, colorThreshold);
 
   context.putImageData(imageData, 0, 0);
 
@@ -285,6 +286,7 @@ const storageKey = 'NameTagOS';
 const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
 const defaultSettings = {
   backgroundColor: "white",
+  colorThreshold: 127,
 
   aspectPreset: "picture",    // "picture" | "display" | "custom"
   aspectRatio: 1,             // width/height of displayed image
@@ -625,6 +627,16 @@ const EditBackgroundColor = (state, event) => {
   }));
 };
 
+const EditColorThreshold = (state, event) => {
+  return rerenderImage(storeLocal({
+    ...state,
+    imageSettings: {
+      ...state.imageSettings,
+      colorThreshold: event.target.value,
+    },
+  }));
+};
+
 
 // UI components
 
@@ -734,6 +746,16 @@ app({
             {value: "black", label: "Black"},
           ], EditBackgroundColor, h("span", {}))
           ("backgroundColor", imageSettings.backgroundColor)),
+
+          state.imageURL &&
+          Field("Color threshold:", {}, h("input", {
+            type: "range",
+            min: 0,
+            max: 256,
+            step: 1,
+            value: imageSettings.colorThreshold,
+            oninput: EditColorThreshold,
+          })),
 
           state.imageURL &&
           Field("Aspect preset:", {}, RadioList("aspectPreset", [
