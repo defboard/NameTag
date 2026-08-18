@@ -288,7 +288,7 @@ const readAsDataURL = (file) => new Promise((resolve, reject) => {
 const storageKey = 'NameTagOS';
 const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
 const defaultSettings = {
-  aspectPreset: "display",    // "display" | "picture" | "custom"
+  aspectPreset: "picture",    // "picture" | "display" | "custom"
   aspectRatio: 1,             // width/height of displayed image
   zoom: 50,
 
