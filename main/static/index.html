@@ -216,7 +216,7 @@ const transformColors = (pixelData) => {
   return pixelData;
 };
 
-const renderImage = async function (dataURL, width, height, aspectPreset, aspectRatio, zoom, dx, dy) {
+const renderImage = async function (dataURL, width, height, aspectPreset, aspectRatio, zoom, xOffset, yOffset) {
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -241,6 +241,9 @@ const renderImage = async function (dataURL, width, height, aspectPreset, aspect
 
   const sizeX = height * zoom * aspectRatio;
   const sizeY = height * zoom;
+
+  const dx = (width - sizeX) / 2 + xOffset * sizeX;
+  const dy = (height - sizeY) / 2 + yOffset * sizeY;
 
   const context = canvas.getContext("2d");
   context.drawImage(
@@ -285,6 +288,14 @@ const defaultSettings = {
   aspectRatio: 1,             // width/height of displayed image
   zoom: 50,
 
+  // Offset of the image center from display center in multiples of the image size.
+  // (0,0) means the center pixel of the selected image is displayed at
+  // the center of the display. (0.5, 0.5) means the bottom right corner of the
+  // image is displayed at the center of the display.
+  // Why not simply take the absolute offset in display coordinates? Because
+  // that would require recalculating xOffset/yOffset whenever the aspectRatio
+  // or zoom is changed, which can lead to the image wandering offscreen due
+  // to rounding errors or out-of-sequence calculations.
   xOffset: 0,
   yOffset: 0,
 };
@@ -551,19 +562,12 @@ const EditImage = (key) => (state, event) => {
 };
 
 const SetAspectRatio = (state, aspectPreset, aspectRatio) => {
-  const old = state.imageSettings;
-  const centerX = state.serverstatus.displayWidth / 2;
-  const centerY = state.serverstatus.displayHeight / 2;
-  const xOffset = centerX - (centerX - old.xOffset) * aspectRatio / old.aspectRatio;
-  const yOffset = centerY - (centerY - old.yOffset);
   return rerenderImage(storeLocal({
     ...state,
     imageSettings: {
       ...state.imageSettings,
       aspectPreset,
       aspectRatio,
-      xOffset,
-      yOffset,
     },
   }));
 };
@@ -593,23 +597,11 @@ const EditAspectRatio = (state, event) => {
 };
 
 const EditZoom = (state, event) => {
-  const centerX = state.serverstatus.displayWidth / 2;
-  const centerY = state.serverstatus.displayHeight / 2;
-  const old = state.imageSettings;
-  const zoom = event.target.value;
-  // We zoom relative to the center of the currently visible area, i.e. the
-  // center pixel must stay the same before/after change of zoom:
-  //        (w/2 - dx) / sx = (w/2 - dx') / sx'
-  // or:    (h/2 - dy) / sy = (h/2 - dy') / sy'
-  const xOffset = zoomFactor(zoom) / zoomFactor(old.zoom) * (old.xOffset - centerX) + centerX;
-  const yOffset = zoomFactor(zoom) / zoomFactor(old.zoom) * (old.yOffset - centerY) + centerY;
   return rerenderImage(storeLocal({
     ...state,
     imageSettings: {
       ...state.imageSettings,
-      zoom,
-      xOffset,
-      yOffset,
+      zoom: event.target.value,
     },
   }));
 };
