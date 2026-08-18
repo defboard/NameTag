@@ -170,7 +170,6 @@ const updateRecursive = (a, b) => {
   return a;
 };
 
-
 const JSON_safeParse = (text) => {
   try {
     return JSON.parse(text) || {};
@@ -179,6 +178,9 @@ const JSON_safeParse = (text) => {
     return {};
   }
 }
+
+
+// Image operations
 
 const transformColors = (pixelData, threshold) => {
   for (let i = 0; i < pixelData.length; i += 4) {
@@ -508,6 +510,7 @@ const SetImageData = (state, {imageURL, imageBlob, ...imageSettings}) => storeLo
   imageBlob,
 });
 
+
 // Preferences
 const SetEditField = (state, key, value) => ({
   ...state,
@@ -550,6 +553,9 @@ const EditFile = (key) => (state, event) => {
     [key]: event.target.files.length == 1 && event.target.files[0],
   });
 };
+
+
+// Actions for image settings:
 
 const EditImage = (key) => (state, event) => {
   const file = event.target.files.length == 1 && event.target.files[0];
