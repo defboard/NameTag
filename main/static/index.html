@@ -216,7 +216,7 @@ const transformColors = (pixelData) => {
   return pixelData;
 };
 
-const renderImage = async function (dataURL, width, height, sx, sy, dx, dy) {
+const renderImage = async function (dataURL, width, height, aspectPreset, aspectRatio, zoom, dx, dy) {
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -229,11 +229,24 @@ const renderImage = async function (dataURL, width, height, sx, sy, dx, dy) {
     image.src = dataURL;
   });
 
+  const naturalWidth = image.naturalWidth;
+  const naturalHeight = image.naturalHeight;
+
+  if (aspectPreset === "picture") {
+    aspectRatio = naturalWidth / naturalHeight;
+  }
+  else if (aspectPreset === "display") {
+    aspectRatio = width / height;
+  }
+
+  const sizeX = height * zoom * aspectRatio;
+  const sizeY = height * zoom;
+
   const context = canvas.getContext("2d");
   context.drawImage(
     image,
-    0, 0, image.naturalWidth, image.naturalHeight,
-    dx, dy, canvas.width * sx, canvas.height * sy);
+    0, 0, naturalWidth, naturalHeight,
+    dx, dy, sizeX, sizeY);
 
   const settings = { pixelFormat: "rgba-unorm8" };
   const imageData = context.getImageData(0, 0, width, height, settings);
@@ -246,7 +259,13 @@ const renderImage = async function (dataURL, width, height, sx, sy, dx, dy) {
   const imageURL = canvas.toDataURL();
   const imageBlob = new Blob([pixelData]);
 
-  return {imageURL, imageBlob}
+  return {
+    imageURL,
+    imageBlob,
+    aspectRatio,
+    naturalWidth,
+    naturalHeight,
+  };
 };
 
 const readAsDataURL = (file) => new Promise((resolve, reject) => {
@@ -262,8 +281,10 @@ const readAsDataURL = (file) => new Promise((resolve, reject) => {
 const storageKey = 'NameTagOS';
 const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
 const defaultSettings = {
-  xZoom: 50,
-  yZoom: 50,
+  aspectPreset: "display",    // "display" | "picture" | "custom"
+  aspectRatio: 1,             // width/height of displayed image
+  zoom: 50,
+
   xOffset: 0,
   yOffset: 0,
 };
@@ -309,6 +330,8 @@ const rerenderImage = (state) => [
 ];
 
 const zoomFactor = (step) => Math.exp((step - 50) / 25);
+const aspectToFactor = (value) => Math.exp((value - 500) / 200);
+const aspectToValue = (factor) => Math.log(factor) * 200 + 500;
 
 // Effects
 
@@ -348,13 +371,15 @@ const setSourceImageFile = (dispatch, [file]) => {
 
 const setSourceImageURL = (dispatch, [sourceImageURL, state]) => {
   const {displayWidth, displayHeight} = state.serverstatus;
-  const {xZoom, yZoom, xOffset, yOffset} = state.imageSettings;
+  const {zoom, xOffset, yOffset} = state.imageSettings;
+  const {aspectPreset, aspectRatio} = state.imageSettings;
   renderImage(
     sourceImageURL,
     displayWidth,
     displayHeight,
-    zoomFactor(xZoom),
-    zoomFactor(yZoom),
+    aspectPreset,
+    aspectRatio,
+    zoomFactor(zoom),
     xOffset,
     yOffset)
   .then(result => dispatch(SetImageData, result));
@@ -456,8 +481,12 @@ const SetSourceImageURL = (state, [sourceImageURL, sourceImageName]) => [
   })),
 ];
 
-const SetImageData = (state, {imageURL, imageBlob}) => storeLocal({
+const SetImageData = (state, {imageURL, imageBlob, ...imageSettings}) => storeLocal({
   ...state,
+  imageSettings: {
+    ...state.imageSettings,
+    ...imageSettings,
+  },
   imageURL,
   imageBlob,
 });
@@ -521,27 +550,66 @@ const EditImage = (key) => (state, event) => {
   ];
 };
 
-const EditZoom = (xy) => (state, event) => {
-  const zoomKey = `${xy}Zoom`;
-  const offsetKey = `${xy}Offset`;
-  const sizeKey = xy == "x" ? "displayWidth" : "displayHeight"
-  const centerPos = state.serverstatus[sizeKey] / 2;
-  const oldZoom = state.imageSettings[zoomKey];
-  const oldOffset = state.imageSettings[offsetKey];
-  const newZoom = event.target.value;
-  const newOffset = (
-    // We zoom relative to the center of the currently visible area, i.e. the
-    // center pixel must stay the same before/after change of zoom:
-    //        (w/2 - dx) / sx = (w/2 - dx') / sx
-    // or:    (h/2 - dy) / sy = (h/2 - dy') / sy
-    zoomFactor(newZoom) / zoomFactor(oldZoom) * (oldOffset - centerPos) + centerPos
-  );
+const SetAspectRatio = (state, aspectPreset, aspectRatio) => {
+  const old = state.imageSettings;
+  const centerX = state.serverstatus.displayWidth / 2;
+  const centerY = state.serverstatus.displayHeight / 2;
+  const xOffset = centerX - (centerX - old.xOffset) * aspectRatio / old.aspectRatio;
+  const yOffset = centerY - (centerY - old.yOffset);
   return rerenderImage(storeLocal({
     ...state,
     imageSettings: {
       ...state.imageSettings,
-      [zoomKey]: newZoom,
-      [offsetKey]: newOffset,
+      aspectPreset,
+      aspectRatio,
+      xOffset,
+      yOffset,
+    },
+  }));
+};
+
+const SetAspectPreset = (state, event) => {
+  const {displayWidth, displayHeight} = state.serverstatus;
+  const {naturalWidth, naturalHeight} = state.imageSettings;
+
+  const aspectPreset = event.target.value;
+
+  let aspectRatio;
+  if (aspectPreset === "picture") {
+    aspectRatio = naturalWidth / naturalHeight;
+  }
+  else if (aspectPreset === "display") {
+    aspectRatio = displayWidth / displayHeight;
+  }
+  else {
+    aspectRatio = state.imageSettings.aspectRatio;
+  }
+
+  return SetAspectRatio(state, aspectPreset, aspectRatio);
+}
+
+const EditAspectRatio = (state, event) => {
+  return SetAspectRatio(state, "custom", aspectToFactor(event.target.value));
+};
+
+const EditZoom = (state, event) => {
+  const centerX = state.serverstatus.displayWidth / 2;
+  const centerY = state.serverstatus.displayHeight / 2;
+  const old = state.imageSettings;
+  const zoom = event.target.value;
+  // We zoom relative to the center of the currently visible area, i.e. the
+  // center pixel must stay the same before/after change of zoom:
+  //        (w/2 - dx) / sx = (w/2 - dx') / sx'
+  // or:    (h/2 - dy) / sy = (h/2 - dy') / sy'
+  const xOffset = zoomFactor(zoom) / zoomFactor(old.zoom) * (old.xOffset - centerX) + centerX;
+  const yOffset = zoomFactor(zoom) / zoomFactor(old.zoom) * (old.yOffset - centerY) + centerY;
+  return rerenderImage(storeLocal({
+    ...state,
+    imageSettings: {
+      ...state.imageSettings,
+      zoom,
+      xOffset,
+      yOffset,
     },
   }));
 };
@@ -590,7 +658,7 @@ const NumberInput = (props, multiplier, unitName) => (key, value) => [
   h("span", {}, text(unitName)),
 ];
 
-const RadioList = (name, items) => (key, value) => (
+const RadioList = (name, items, action, sep) => (key, value) => (
   items.flatMap((item, idx) => [
     h("input", {
       type: "radio",
@@ -598,10 +666,10 @@ const RadioList = (name, items) => (key, value) => (
       value: item.value,
       id: name + item.value,
       checked: value == item.value,
-      oninput: EditText(key),
+      oninput: action ?? EditText(key),
     }),
     h("label", {for: name + item.value}, text(item.label)),
-    (idx == items.length - 1) || h("br", {}, []),
+    (idx == items.length - 1) || (sep ?? h("br", {}, [])),
   ])
 );
 
@@ -626,7 +694,7 @@ app({
   ],
 
   view: (state) => {
-    const {serverstatus, activeTab, disableInputs, editstatus} = state;
+    const {serverstatus, activeTab, disableInputs, editstatus, imageSettings} = state;
     const isWiFiOff = (editstatus.wifiMode ?? serverstatus.wifiMode) == "OFF";
 
     return h("div", {}, [
@@ -646,23 +714,30 @@ app({
           })),
 
           state.imageURL &&
-          Field("X-zoom:", {}, h("input", {
+          Field("Aspect preset:", {}, RadioList("aspectPreset", [
+            {value: "picture", label: "Picture"},
+            {value: "display", label: "Display"},
+          ], SetAspectPreset, h("span", {}))
+          ("aspectPreset", imageSettings.aspectPreset)),
+
+          state.imageURL &&
+          Field("Aspect ratio:", {}, h("input", {
             type: "range",
             min: 0,
-            max: 100,
+            max: 1000,
             step: 1,
-            value: state.imageSettings.xZoom,
-            oninput: EditZoom("x"),
+            value: aspectToValue(imageSettings.aspectRatio),
+            oninput: EditAspectRatio,
           })),
 
           state.imageURL &&
-          Field("Y-zoom:", {}, h("input", {
+          Field("Zoom:", {}, h("input", {
             type: "range",
             min: 0,
             max: 100,
             step: 1,
-            value: state.imageSettings.yZoom,
-            oninput: EditZoom("y"),
+            value: imageSettings.zoom,
+            oninput: EditZoom,
           })),
 
         ]),
