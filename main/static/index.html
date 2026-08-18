@@ -190,28 +190,13 @@ const transformColors = (pixelData) => {
     const blue  = pixelData[i + 2] > 127;
     const alpha = pixelData[i + 3] > 127;
 
-    const white = (red && green && blue) || !alpha;
-    const color = (red || green || blue) && !white;
-    const black = !white && !color;
+    const white = (red && green && blue);
+    const color = (red || green || blue);
 
-    if (white) {
-      pixelData[i + 0] = 0xff;
-      pixelData[i + 1] = 0xff;
-      pixelData[i + 2] = 0xff;
-      pixelData[i + 3] = 0xff;
-    }
-    else if (color) {
-      pixelData[i + 0] = 0xff;
-      pixelData[i + 1] = 0x00;
-      pixelData[i + 2] = 0x00;
-      pixelData[i + 3] = 0xff;
-    }
-    else {
-      pixelData[i + 0] = 0x00;
-      pixelData[i + 1] = 0x00;
-      pixelData[i + 2] = 0x00;
-      pixelData[i + 3] = 0xff;
-    }
+    pixelData[i + 0] = white || color ? 0xff : 0x00;
+    pixelData[i + 1] = white          ? 0xff : 0x00;
+    pixelData[i + 2] = white          ? 0xff : 0x00;
+    pixelData[i + 3] = alpha          ? 0xff : 0x00;
   }
   return pixelData;
 };
@@ -227,7 +212,16 @@ const createImageBitmapFromDataURL = async function (dataURL) {
   return bitmap;
 };
 
-const renderImage = async function (image, width, height, aspectPreset, aspectRatio, zoom, xOffset, yOffset) {
+const renderImage = async function (image, width, height, imageSettings) {
+  let {
+    backgroundColor,
+    aspectPreset,
+    aspectRatio,
+    zoom,
+    xOffset,
+    yOffset,
+  } = imageSettings;
+  zoom = zoomFactor(zoom);
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -250,6 +244,8 @@ const renderImage = async function (image, width, height, aspectPreset, aspectRa
   const dy = (height - sizeY) / 2 + yOffset * sizeY;
 
   const context = canvas.getContext("2d");
+  context.fillStyle = backgroundColor;
+  context.fillRect(0, 0, width, height);
   context.drawImage(
     image,
     0, 0, naturalWidth, naturalHeight,
@@ -288,6 +284,8 @@ const readAsDataURL = (file) => new Promise((resolve, reject) => {
 const storageKey = 'NameTagOS';
 const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
 const defaultSettings = {
+  backgroundColor: "white",
+
   aspectPreset: "picture",    // "picture" | "display" | "custom"
   aspectRatio: 1,             // width/height of displayed image
   zoom: 50,
@@ -397,19 +395,9 @@ const renderImageFromURL = (dispatch, [sourceImageURL, state]) => {
 };
 
 const renderImageFromBitmap = (dispatch, state) => {
-  const {sourceImageBitmap} = state;
+  const {sourceImageBitmap, imageSettings} = state;
   const {displayWidth, displayHeight} = state.serverstatus;
-  const {zoom, xOffset, yOffset} = state.imageSettings;
-  const {aspectPreset, aspectRatio} = state.imageSettings;
-  renderImage(
-    sourceImageBitmap,
-    displayWidth,
-    displayHeight,
-    aspectPreset,
-    aspectRatio,
-    zoomFactor(zoom),
-    xOffset,
-    yOffset)
+  renderImage(sourceImageBitmap, displayWidth, displayHeight, imageSettings)
   .then(result => dispatch(SetImageData, result));
 };
 
@@ -627,6 +615,16 @@ const EditZoom = (state, event) => {
   }));
 };
 
+const EditBackgroundColor = (state, event) => {
+  return rerenderImage(storeLocal({
+    ...state,
+    imageSettings: {
+      ...state.imageSettings,
+      backgroundColor: event.target.value,
+    },
+  }));
+};
+
 
 // UI components
 
@@ -728,6 +726,14 @@ app({
             accept: "image/*",
             oninput: EditImage(key),
           })),
+
+          state.imageURL &&
+          Field("Background color:", {}, RadioList("backgroundColor", [
+            {value: "white", label: "White"},
+            {value: "red", label: "Red"},
+            {value: "black", label: "Black"},
+          ], EditBackgroundColor, h("span", {}))
+          ("backgroundColor", imageSettings.backgroundColor)),
 
           state.imageURL &&
           Field("Aspect preset:", {}, RadioList("aspectPreset", [
