@@ -156,6 +156,18 @@ dt.error, dd.error {
 
 import { h, text, app } from "./hyperapp.js"
 
+const objRetrieve = (obj, keys) => {
+  return keys.reduce((value, key) => value[key], obj);
+};
+
+const objStore = (obj, keys, value) => {
+  const key = keys.shift();
+  return {
+    ...obj,
+    [key]: keys.length == 0 ? value : objStore(obj[key], keys, value),
+  };
+};
+
 const updateRecursive = (a, b) => {
   for (const key in b) {
     if (typeof(a[key]) == "object" && !Array.isArray(a[key]) &&
@@ -512,16 +524,10 @@ const SetImageData = (state, {imageURL, imageBlob, ...imageSettings}) => storeLo
 
 
 // Preferences
-const SetEditField = (state, key, value) => ({
-  ...state,
-  editstatus: {
-    ...state.editstatus,
-    [key]: value,
-  },
-});
+const SetEditField = (state, key, value) => objStore(state, key.split("."), value);
 
 const PrefsSave = (state, event) => ([
-  DisableInputs(SetEditField(state, "wifiPassword", undefined)),
+  DisableInputs(SetEditField(state, "editstatus.wifiPassword", undefined)),
   [postRequest, ["prefs", state.editstatus, GotServerStatus]],
 ]);
 
@@ -664,11 +670,16 @@ const HyperRef = (href, name) => (
   h("a", {href, target: "_blank"}, text(name))
 );
 
-const InputField = (state, key, label, contentFunc) => {
+const PrefsInput = (state, key, label, contentFunc) => {
   const default_ = state.serverstatus[key];
   const value = state.editstatus[key] ?? default_;
   const modified = value != default_;
-  return Field(label, {class: {modified}}, contentFunc(key, value));
+  return Field(label, {class: {modified}}, contentFunc(`editstatus.${key}`, value));
+};
+
+const AppInput = (state, key, label, contentFunc) => {
+  const value = objRetrieve(state, key.split("."));
+  return Field(label, {}, contentFunc(key, value));
 };
 
 const TextInput = (props) => (key, value) => h("input", {
@@ -730,19 +741,18 @@ app({
 
       activeTab == "status" && h('main', {}, [
         Fieldset("Image", [
-          InputField(state, "imageFile", "Image file:", (key, value) => h("input", {
+          AppInput(state, "imageFile", "Image file:", (key, value) => h("input", {
             type: "file",
             accept: "image/*",
             oninput: EditImage(key),
           })),
 
           state.imageURL &&
-          Field("Background color:", {}, RadioList("backgroundColor", [
+          AppInput(state, "imageSettings.backgroundColor", "Background color:", RadioList("backgroundColor", [
             {value: "white", label: "White"},
             {value: "red", label: "Red"},
             {value: "black", label: "Black"},
-          ], EditBackgroundColor, h("span", {}))
-          ("backgroundColor", imageSettings.backgroundColor)),
+          ], EditBackgroundColor, h("span", {}))),
 
           state.imageURL &&
           Field("Color threshold:", {}, h("input", {
@@ -755,11 +765,10 @@ app({
           })),
 
           state.imageURL &&
-          Field("Aspect preset:", {}, RadioList("aspectPreset", [
+          AppInput(state, "imageSettings.aspectPreset", "Aspect preset:", RadioList("aspectPreset", [
             {value: "picture", label: "Picture"},
             {value: "display", label: "Display"},
-          ], SetAspectPreset, h("span", {}))
-          ("aspectPreset", imageSettings.aspectPreset)),
+          ], SetAspectPreset, h("span", {}))),
 
           state.imageURL &&
           Field("Aspect ratio:", {}, h("input", {
@@ -848,14 +857,14 @@ app({
         ]),
 
         Fieldset("WiFi settings", [
-          InputField(state, "wifiMode", "Connection mode:", RadioList("wifiMode", [
+          PrefsInput(state, "wifiMode", "Connection mode:", RadioList("wifiMode", [
             {value: "OFF", label: "Off"},
             {value: "STA", label: "Client"},
             {value: "AP", label: "Hotspot"},
           ])),
-          InputField(state, "wifiSsid", "SSID/name:", TextInput({disabled: isWiFiOff})),
-          InputField(state, "wifiPassword", "Password:", TextInput({disabled: isWiFiOff, placeholder: "**************"})),
-          InputField(state, "wifiHostname", "Device hostname:", TextInput({disabled: isWiFiOff})),
+          PrefsInput(state, "wifiSsid", "SSID/name:", TextInput({disabled: isWiFiOff})),
+          PrefsInput(state, "wifiPassword", "Password:", TextInput({disabled: isWiFiOff, placeholder: "**************"})),
+          PrefsInput(state, "wifiHostname", "Device hostname:", TextInput({disabled: isWiFiOff})),
         ]),
 
         h("div", {class: "actions"}, [
@@ -864,7 +873,7 @@ app({
         ]),
 
         Fieldset("Firmware", [
-          InputField(state, "firmwareImage", "Firmware image:", (key, value) => h("input", {
+          PrefsInput(state, "firmwareImage", "Firmware image:", (key, value) => h("input", {
             type: "file",
             accept: ".bin,.bin.gz",
             oninput: EditFile(key),
