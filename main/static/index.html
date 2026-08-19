@@ -576,80 +576,24 @@ const EditImage = (key) => (state, event) => {
   ];
 };
 
-const SetAspectRatio = (state, aspectPreset, aspectRatio) => {
-  return rerenderImage(storeLocal({
+const EditAspectRatio = (state, event) =>
+  rerenderImage(storeLocal({
     ...state,
     imageSettings: {
       ...state.imageSettings,
-      aspectPreset,
-      aspectRatio,
+      aspectPreset: "custom",
+      aspectRatio: aspectToFactor(event.target.value),
     },
   }));
-};
 
-const SetAspectPreset = (state, event) => {
-  const {displayWidth, displayHeight} = state.serverstatus;
-  const {naturalWidth, naturalHeight} = state.imageSettings;
-
-  const aspectPreset = event.target.value;
-
-  let aspectRatio;
-  if (aspectPreset === "picture") {
-    aspectRatio = naturalWidth / naturalHeight;
-  }
-  else if (aspectPreset === "display") {
-    aspectRatio = displayWidth / displayHeight;
-  }
-  else {
-    aspectRatio = state.imageSettings.aspectRatio;
-  }
-
-  return SetAspectRatio(state, aspectPreset, aspectRatio);
-}
-
-const EditAspectRatio = (state, event) => {
-  return SetAspectRatio(state, "custom", aspectToFactor(event.target.value));
-};
-
-const EditZoom = (state, event) => {
-  return rerenderImage(storeLocal({
-    ...state,
-    imageSettings: {
-      ...state.imageSettings,
-      zoom: event.target.value,
-    },
-  }));
-};
-
-const EditOffset = (key) => (state, event) => {
-  return rerenderImage(storeLocal({
+const EditImageSetting = (key) => (state, event) =>
+  rerenderImage(storeLocal({
     ...state,
     imageSettings: {
       ...state.imageSettings,
       [key]: event.target.value,
     },
   }));
-};
-
-const EditBackgroundColor = (state, event) => {
-  return rerenderImage(storeLocal({
-    ...state,
-    imageSettings: {
-      ...state.imageSettings,
-      backgroundColor: event.target.value,
-    },
-  }));
-};
-
-const EditColorThreshold = (state, event) => {
-  return rerenderImage(storeLocal({
-    ...state,
-    imageSettings: {
-      ...state.imageSettings,
-      colorThreshold: event.target.value,
-    },
-  }));
-};
 
 
 // UI components
@@ -752,7 +696,7 @@ app({
             {value: "white", label: "White"},
             {value: "red", label: "Red"},
             {value: "black", label: "Black"},
-          ], EditBackgroundColor, h("span", {}))),
+          ], EditImageSetting("backgroundColor"), h("span", {}))),
 
           state.imageURL &&
           Field("Color threshold:", {}, h("input", {
@@ -761,14 +705,14 @@ app({
             max: 256,
             step: 1,
             value: imageSettings.colorThreshold,
-            oninput: EditColorThreshold,
+            oninput: EditImageSetting("colorThreshold"),
           })),
 
           state.imageURL &&
           AppInput(state, "imageSettings.aspectPreset", "Aspect preset:", RadioList("aspectPreset", [
             {value: "picture", label: "Picture"},
             {value: "display", label: "Display"},
-          ], SetAspectPreset, h("span", {}))),
+          ], EditImageSetting("aspectPreset"), h("span", {}))),
 
           state.imageURL &&
           Field("Aspect ratio:", {}, h("input", {
@@ -787,7 +731,7 @@ app({
             max: 100,
             step: 1,
             value: imageSettings.zoom,
-            oninput: EditZoom,
+            oninput: EditImageSetting("zoom"),
           })),
 
           state.imageURL &&
@@ -797,7 +741,7 @@ app({
             max: 1,
             step: 0.01,
             value: imageSettings.xOffset,
-            oninput: EditOffset("xOffset"),
+            oninput: EditImageSetting("xOffset"),
           })),
 
           state.imageURL &&
@@ -807,7 +751,7 @@ app({
             max: 1,
             step: 0.01,
             value: imageSettings.yOffset,
-            oninput: EditOffset("yOffset"),
+            oninput: EditImageSetting("yOffset"),
           })),
 
         ]),
