@@ -239,6 +239,7 @@ const renderImage = async function (image, width, height, imageSettings) {
     xOffset,
     yOffset,
     colorThreshold,
+    imageRotation,
   } = imageSettings;
   zoom = zoomFactor(zoom);
 
@@ -266,10 +267,14 @@ const renderImage = async function (image, width, height, imageSettings) {
   context.fillStyle = backgroundColor;
   context.fillRect(0, 0, width, height);
 
+  context.translate(width / 2, height / 2);
+  context.rotate(imageRotation * Math.PI / 180);
+  context.translate(-width / 2, -height / 2);
   context.drawImage(
     image,
     0, 0, naturalWidth, naturalHeight,
     dx, dy, sizeX, sizeY);
+  context.resetTransform();
 
   const settings = { pixelFormat: "rgba-unorm8" };
   const imageData = context.getImageData(0, 0, width, height, settings);
@@ -312,6 +317,7 @@ const defaultSettings = {
   zoom: 50,
 
   canvasRotation: "0deg",
+  imageRotation: 0,
 
   // Offset of the image center from display center in multiples of the image size.
   // (0,0) means the center pixel of the selected image is displayed at
@@ -629,14 +635,19 @@ const DoDrag = (state, event) => {
   const displayAspect = displayWidth / displayHeight;
 
   const {imageSettings} = state;
-  const {aspectRatio} = imageSettings;
+  const {aspectRatio, imageRotation} = imageSettings;
   const zoom = zoomFactor(imageSettings.zoom);
 
-  const sizeX = zoom * aspectRatio / displayAspect;
+  const sizeX = zoom * aspectRatio;
   const sizeY = zoom;
 
-  const xOffset = state.dragImageOffsetX + deltaX / sizeX;
-  const yOffset = state.dragImageOffsetY + deltaY / sizeY;
+  const dx = deltaX * displayAspect;
+  const dy = deltaY;
+  const cos = Math.cos(-imageRotation * Math.PI / 180);
+  const sin = Math.sin(-imageRotation * Math.PI / 180);
+
+  const xOffset = state.dragImageOffsetX + (dx * cos - dy * sin) / sizeX;
+  const yOffset = state.dragImageOffsetY + (dx * sin + dy * cos) / sizeY;
 
   return rerenderImage(storeLocal({
     ...state,
@@ -778,6 +789,14 @@ app({
             {value: "0deg", label: "Landscape"},
             {value: "90deg", label: "Portrait"},
           ], EditImageSetting("canvasRotation"), h("span", {}))),
+
+          state.imageURL &&
+          AppInput(state, "imageSettings.imageRotation", "Image rotation:", RadioList("imageRotation", [
+            {value: 0, label: "0°"},
+            {value: 90, label: "90°"},
+            {value: 180, label: "180°"},
+            {value: 270, label: "270°"},
+          ], EditImageSetting("imageRotation"), h("span", {}))),
 
           state.imageURL &&
           AppInput(state, "imageSettings.backgroundColor", "Background color:", RadioList("backgroundColor", [
