@@ -55,6 +55,12 @@ nav > div.active:hover {
 main {
 }
 
+.previewContainer {
+  /* center vertically: */
+  display: flex;
+  justify-content: center;
+}
+
 img.preview {
   /* aspect-ratio: 296 / 128; */
   border: 1px solid blue;
@@ -304,6 +310,8 @@ const defaultSettings = {
   aspectPreset: "picture",    // "picture" | "display" | "custom"
   aspectRatio: 1,             // width/height of displayed image
   zoom: 50,
+
+  canvasRotation: "0deg",
 
   // Offset of the image center from display center in multiples of the image size.
   // (0,0) means the center pixel of the selected image is displayed at
@@ -766,6 +774,12 @@ app({
           })),
 
           state.imageURL &&
+          AppInput(state, "imageSettings.canvasRotation", "Display format:", RadioList("canvasRotation", [
+            {value: "0deg", label: "Landscape"},
+            {value: "90deg", label: "Portrait"},
+          ], EditImageSetting("canvasRotation"), h("span", {}))),
+
+          state.imageURL &&
           AppInput(state, "imageSettings.backgroundColor", "Background color:", RadioList("backgroundColor", [
             {value: "white", label: "White"},
             {value: "red", label: "Red"},
@@ -831,17 +845,31 @@ app({
         ]),
 
         state.imageURL &&
-        h("img", {
-          class: "preview",
-          src: state.imageURL,
-          width: 2 * serverstatus.displayWidth,
-          height: 2 * serverstatus.displayHeight,
-          onmousedown: !isDragging && StartDrag,
-          onmouseup: isDragging && StopDrag,
-          onmousemove: isDragging && DoDrag,
-          onwheel: DoZoom,
-          draggable: false,
-        }),
+        h("div", {
+          class: "previewContainer",
+          style: {
+            height: (
+              imageSettings.canvasRotation === "0deg"
+              ? `${2 * serverstatus.displayHeight}px`
+              : `${2 * serverstatus.displayWidth}px`
+            ),
+          },
+        }, [
+          h("img", {
+            class: "preview",
+            src: state.imageURL,
+            width: 2 * serverstatus.displayWidth,
+            height: 2 * serverstatus.displayHeight,
+            style: {
+              rotate: imageSettings.canvasRotation,
+            },
+            onmousedown: !isDragging && StartDrag,
+            onmouseup: isDragging && StopDrag,
+            onmousemove: isDragging && DoDrag,
+            onwheel: DoZoom,
+            draggable: false,
+          }),
+        ]),
 
         (state.uploadProgress || state.uploadResult) &&
         Fieldset("Upload", [
