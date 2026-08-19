@@ -153,7 +153,7 @@ dt.error, dd.error {
 .actions > button {
   flex-grow: 1;
   flex-basis: 100%;
-  margin: 0.5ex 0.1em;
+  margin: 0.5ex 0.1em 2ex;
 }
     </style>
   </head>
@@ -864,33 +864,6 @@ app({
 
         ]),
 
-        state.imageURL &&
-        h("div", {
-          class: "previewContainer",
-          style: {
-            height: (
-              imageSettings.canvasRotation === "0deg"
-              ? `${2 * serverstatus.displayHeight}px`
-              : `${2 * serverstatus.displayWidth}px`
-            ),
-          },
-        }, [
-          h("img", {
-            class: "preview",
-            src: state.imageURL,
-            width: 2 * serverstatus.displayWidth,
-            height: 2 * serverstatus.displayHeight,
-            style: {
-              rotate: imageSettings.canvasRotation,
-            },
-            onmousedown: !isDragging && StartDrag,
-            onmouseup: isDragging && StopDrag,
-            onmousemove: isDragging && DoDrag,
-            onwheel: DoZoom,
-            draggable: false,
-          }),
-        ]),
-
         (state.uploadProgress || state.uploadResult) &&
         Fieldset("Upload", [
           state.uploadProgress &&
@@ -918,6 +891,33 @@ app({
             onclick: UploadImage,
             disabled: disableInputs || !state.imageBlob,
           }, text("Upload image")),
+        ]),
+
+        state.imageURL &&
+        h("div", {
+          class: "previewContainer",
+          style: {
+            height: (
+              imageSettings.canvasRotation === "0deg"
+              ? `${2 * serverstatus.displayHeight}px`
+              : `${2 * serverstatus.displayWidth}px`
+            ),
+          },
+        }, [
+          h("img", {
+            class: "preview",
+            src: state.imageURL,
+            width: 2 * serverstatus.displayWidth,
+            height: 2 * serverstatus.displayHeight,
+            style: {
+              rotate: imageSettings.canvasRotation,
+            },
+            onmousedown: !isDragging && StartDrag,
+            onmouseup: isDragging && StopDrag,
+            onmousemove: isDragging && DoDrag,
+            onwheel: DoZoom,
+            draggable: false,
+          }),
         ]),
 
       ]), // </main> "status"
