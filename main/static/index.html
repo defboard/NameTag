@@ -239,6 +239,7 @@ const renderImage = async function (image, width, height, imageSettings) {
     xOffset,
     yOffset,
     colorThreshold,
+    palette,
     imageRotation,
   } = imageSettings;
   zoom = zoomFactor(zoom);
@@ -280,9 +281,10 @@ const renderImage = async function (image, width, height, imageSettings) {
   const imageData = context.getImageData(0, 0, width, height, settings);
   const pixelData = imageData.data;
 
-  transformColors(pixelData, colorThreshold);
-
-  context.putImageData(imageData, 0, 0);
+  if (palette == "display") {
+    transformColors(pixelData, colorThreshold);
+    context.putImageData(imageData, 0, 0);
+  }
 
   const imageURL = canvas.toDataURL();
   const imageBlob = new Blob([pixelData]);
@@ -311,6 +313,7 @@ const savedState = JSON.parse(localStorage.getItem(storageKey) || "{}");
 const defaultSettings = {
   backgroundColor: "white",
   colorThreshold: 127,
+  palette: "display",         // "original" | "display"
 
   aspectPreset: "picture",    // "picture" | "display" | "custom"
   aspectRatio: 1,             // width/height of displayed image
@@ -797,6 +800,12 @@ app({
             {value: 180, label: "180°"},
             {value: 270, label: "270°"},
           ], EditImageSetting("imageRotation"), h("span", {}))),
+
+          state.imageURL &&
+          AppInput(state, "imageSettings.palette", "Palette:", RadioList("palette", [
+            {value: "display", label: "Display"},
+            {value: "original", label: "Original"},
+          ], EditImageSetting("palette"), h("span", {}))),
 
           state.imageURL &&
           AppInput(state, "imageSettings.backgroundColor", "Background color:", RadioList("backgroundColor", [
