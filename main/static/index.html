@@ -794,12 +794,24 @@ app({
           ], EditImageSetting("canvasRotation"), h("span", {}))),
 
           state.imageURL &&
-          AppInput(state, "imageSettings.imageRotation", "Image rotation:", RadioList("imageRotation", [
-            {value: 0, label: "0°"},
-            {value: 90, label: "90°"},
-            {value: 180, label: "180°"},
-            {value: 270, label: "270°"},
-          ], EditImageSetting("imageRotation"), h("span", {}))),
+          Field("Image rotation:", {}, [
+            h("input", {
+              type: "range",
+              min: 0,
+              max: 360,
+              step: 1,
+              value: imageSettings.imageRotation,
+              oninput: EditImageSetting("imageRotation"),
+            }),
+            h("br", {}),
+            ...RadioList("imageRotation", [
+              {value: 0, label: "0°"},
+              {value: 90, label: "90°"},
+              {value: 180, label: "180°"},
+              {value: 270, label: "270°"},
+            ], EditImageSetting("imageRotation"), h("span", {}))(
+              "imageSettings.imageRotation", imageSettings.imageRotation),
+          ]),
 
           state.imageURL &&
           AppInput(state, "imageSettings.palette", "Palette:", RadioList("palette", [
