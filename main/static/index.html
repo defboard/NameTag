@@ -61,6 +61,8 @@ img.preview {
   display: block;
   margin: auto;
   /* width: max(100%, 296px); */
+
+  user-select: none;    /* don't select image when dragging mouse over it. */
 }
 
 fieldset {
@@ -325,6 +327,7 @@ const initialState = {
   },
   // client
   activeTab: "status",
+  isDragging: false,
   editstatus: {},
   sourceImageURL: null,
   sourceImageName: null,
@@ -596,6 +599,76 @@ const EditImageSetting = (key) => (state, event) =>
   }));
 
 
+const StopDrag = (state, event) => ({...state, isDragging: false});
+const StartDrag = (state, event) => ({
+  ...state,
+  isDragging: event.buttons == 1,
+  dragMouseOffsetX: event.offsetX,
+  dragMouseOffsetY: event.offsetY,
+  dragImageOffsetX: state.imageSettings.xOffset,
+  dragImageOffsetY: state.imageSettings.yOffset,
+});
+
+const DoDrag = (state, event) => {
+  if (event.buttons != 1) {
+    return {...state, isDragging: false};
+  }
+
+  const deltaX = (event.offsetX - state.dragMouseOffsetX) / event.target.width;
+  const deltaY = (event.offsetY - state.dragMouseOffsetY) / event.target.height;
+
+  const {displayWidth, displayHeight} = state.serverstatus;
+  const displayAspect = displayWidth / displayHeight;
+
+  const {imageSettings} = state;
+  const {aspectRatio} = imageSettings;
+  const zoom = zoomFactor(imageSettings.zoom);
+
+  const sizeX = zoom * aspectRatio / displayAspect;
+  const sizeY = zoom;
+
+  const xOffset = state.dragImageOffsetX + deltaX / sizeX;
+  const yOffset = state.dragImageOffsetY + deltaY / sizeY;
+
+  return rerenderImage(storeLocal({
+    ...state,
+    imageSettings: {
+      ...imageSettings,
+      xOffset,
+      yOffset,
+    },
+  }));
+};
+
+const DoZoom = (state, event) => {
+  event.returnValue = false;
+
+  const {deltaX, deltaY} = event;
+
+  const {imageSettings} = state;
+  let {aspectPreset, aspectRatio, zoom} = imageSettings;
+
+  if (deltaX != 0) {
+    aspectPreset = "custom";
+    aspectRatio = aspectToFactor(aspectToValue(aspectRatio) + 5 * Math.sign(deltaX));
+  }
+
+  if (deltaY != 0) {
+    zoom = zoom + Math.sign(-deltaY);
+  }
+
+  return rerenderImage(storeLocal({
+    ...state,
+    imageSettings: {
+      ...imageSettings,
+      aspectPreset,
+      aspectRatio,
+      zoom,
+    },
+  }));
+};
+
+
 // UI components
 
 const Fieldset = (legend, fields) => (
@@ -674,6 +747,7 @@ app({
   view: (state) => {
     const {serverstatus, activeTab, disableInputs, editstatus, imageSettings} = state;
     const isWiFiOff = (editstatus.wifiMode ?? serverstatus.wifiMode) == "OFF";
+    const isDragging = state.isDragging;
 
     return h("div", {}, [
       h("h1", {}, text("NameTagOS")),
@@ -762,6 +836,11 @@ app({
           src: state.imageURL,
           width: 2 * serverstatus.displayWidth,
           height: 2 * serverstatus.displayHeight,
+          onmousedown: !isDragging && StartDrag,
+          onmouseup: isDragging && StopDrag,
+          onmousemove: isDragging && DoDrag,
+          onwheel: DoZoom,
+          draggable: false,
         }),
 
         (state.uploadProgress || state.uploadResult) &&
