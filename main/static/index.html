@@ -381,9 +381,14 @@ const uploadFile = (dispatch, [url, file, name, progressAction, finishAction]) =
   request.send(form);
 };
 
-const renderImageFromFile = (dispatch, [file]) => {
+const readDataURLFromFile = (dispatch, [file]) => {
   readAsDataURL(file)
-  .then(dataURL => dispatch(SetSourceImageURL, [dataURL, file.name]))
+  .then(dataURL => dispatch(SetSourceImageURL, dataURL))
+};
+
+const renderImageFromFile = (dispatch, [file]) => {
+  window.createImageBitmap(file)
+  .then(bitmap => dispatch(SetSourceImageBitmap, bitmap))
 };
 
 const renderImageFromURL = (dispatch, [sourceImageURL, state]) => {
@@ -496,14 +501,10 @@ const UploadFinished = (state, event) => {
   ];
 };
 
-const SetSourceImageURL = (state, [sourceImageURL, sourceImageName]) => [
-  storeLocal({
-    ...state,
-    sourceImageURL,
-    sourceImageName,
-  }),
-  [renderImageFromURL, [sourceImageURL, state]],
-];
+const SetSourceImageURL = (state, sourceImageURL) => storeLocal({
+  ...state,
+  sourceImageURL,
+});
 
 const SetSourceImageBitmap = (state, sourceImageBitmap) => rerenderImage({
   ...state,
@@ -574,8 +575,10 @@ const EditImage = (key) => (state, event) => {
     storeLocal({
       ...state,
       [key]: file,
+      sourceImageName: file.name,
     }),
     [renderImageFromFile, [file]],
+    [readDataURLFromFile, [file]],
   ];
 };
 
