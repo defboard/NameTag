@@ -363,29 +363,61 @@ const updateImage = (state, updateImageSettings={}) => {
 
   const {displayWidth, displayHeight} = state.serverstatus;
 
-  const newImageSettings = {...state.imageSettings, ...updateImageSettings};
-  let {
+  const oldSettings = state.imageSettings;
+  const imageSettings = {...oldSettings, ...updateImageSettings};
+  const {
     backgroundColor,
     aspectPreset,
-    aspectRatio,
     zoom,
     xOffset,
     yOffset,
     colorThreshold,
     palette,
     imageRotation,
-  } = newImageSettings;
-  zoom = zoomFactor(zoom);
+  } = imageSettings;
+
+  let zoomF = zoomFactor(zoom);
+  let aspectRatio = imageSettings.aspectRatio;
 
   if (aspectPreset === "picture") {
     aspectRatio = image.width / image.height;
-  }
-  else if (aspectPreset === "display") {
-    aspectRatio = displayWidth / displayHeight;
+    imageSettings.aspectRatio = aspectRatio;
   }
 
-  const sizeX = displayHeight * zoom * aspectRatio;
-  const sizeY = displayHeight * zoom;
+  else if (aspectPreset === "display") {
+    const getXYScaling = (imageRotation) => {
+      const displayAspect = displayWidth / displayHeight;
+      const offs = (displayAspect + 1) / 2;
+      const ampl = (displayAspect - 1) / 2;
+      const cos = Math.cos(2 * imageRotation * Math.PI / 180);
+
+      const cx = offs + Math.abs(ampl) * cos;
+      const cy = offs - Math.abs(ampl) * cos;
+      return {cx, cy};
+    };
+
+    const aspectPresetChanged = oldSettings.aspectPreset !== aspectPreset;
+    const imageRotationChanged = oldSettings.imageRotation !== imageRotation;
+    const zoomChanged = oldSettings.zoom !== zoom;
+
+    if (aspectPresetChanged || zoomChanged) {
+      imageSettings.baseZoom = zoomF / getXYScaling(oldSettings.imageRotation).cy;
+    }
+
+    if (aspectPresetChanged || imageRotationChanged) {
+      const {baseZoom} = imageSettings;
+      const {cx, cy} = getXYScaling(imageRotation);
+
+      aspectRatio = cx / cy;
+      imageSettings.aspectRatio = aspectRatio;
+
+      zoomF = baseZoom * cy;
+      imageSettings.zoom = zoomValue(zoomF);
+    }
+  }
+
+  const sizeX = displayHeight * zoomF * aspectRatio;
+  const sizeY = displayHeight * zoomF;
 
   const dx = (displayWidth - sizeX) / 2 + xOffset * sizeX;
   const dy = (displayHeight - sizeY) / 2 + yOffset * sizeY;
@@ -401,11 +433,6 @@ const updateImage = (state, updateImageSettings={}) => {
     sizeY,
   };
 
-  const imageSettings = {
-    ...newImageSettings,
-    aspectRatio,
-  };
-
   const newState = {
     ...state,
     imageSettings,
@@ -419,6 +446,7 @@ const updateImage = (state, updateImageSettings={}) => {
 };
 
 const zoomFactor = (step) => Math.exp((step - 50) / 25);
+const zoomValue = (factor) => Math.log(factor) * 25 + 50;
 const aspectToFactor = (value) => Math.exp((value - 500) / 200);
 const aspectToValue = (factor) => Math.log(factor) * 200 + 500;
 
