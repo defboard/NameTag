@@ -230,39 +230,25 @@ const createImageBitmapFromDataURL = async function (dataURL) {
   return bitmap;
 };
 
-const renderImage = async function (image, width, height, imageSettings) {
-  let {
+const renderImage = async function (image, width, height, renderSettings) {
+
+  const {
     backgroundColor,
-    aspectPreset,
-    aspectRatio,
-    zoom,
-    xOffset,
-    yOffset,
     colorThreshold,
     palette,
     imageRotation,
-  } = imageSettings;
-  zoom = zoomFactor(zoom);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+    dx,
+    dy,
+    sizeX,
+    sizeY,
+  } = renderSettings;
 
   const naturalWidth = image.width;
   const naturalHeight = image.height;
 
-  if (aspectPreset === "picture") {
-    aspectRatio = naturalWidth / naturalHeight;
-  }
-  else if (aspectPreset === "display") {
-    aspectRatio = width / height;
-  }
-
-  const sizeX = height * zoom * aspectRatio;
-  const sizeY = height * zoom;
-
-  const dx = (width - sizeX) / 2 + xOffset * sizeX;
-  const dy = (height - sizeY) / 2 + yOffset * sizeY;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
 
   const context = canvas.getContext("2d");
   context.fillStyle = backgroundColor;
@@ -292,9 +278,6 @@ const renderImage = async function (image, width, height, imageSettings) {
   return {
     imageURL,
     imageBlob,
-    aspectRatio,
-    naturalWidth,
-    naturalHeight,
   };
 };
 
@@ -352,6 +335,7 @@ const initialState = {
   imageBlob: null,
   imageBitmap: null,
   imageSettings: { ...defaultSettings },
+  renderSettings: {},
 };
 updateRecursive(initialState, savedState);
 updateRecursive(initialState, {
@@ -371,11 +355,66 @@ const storeLocal = (state) => {
   return UpdateUI(state);
 };
 
-const rerenderImage = (state) => [
-  state,
-  state.sourceImageBitmap &&
-  [renderImageFromBitmap, state],
-];
+const rerenderImage = (state) => {
+  const image = state.sourceImageBitmap;
+  if (!image) {
+    return [state];
+  }
+
+  const {displayWidth, displayHeight} = state.serverstatus;
+  let {
+    backgroundColor,
+    aspectPreset,
+    aspectRatio,
+    zoom,
+    xOffset,
+    yOffset,
+    colorThreshold,
+    palette,
+    imageRotation,
+  } = state.imageSettings;
+  zoom = zoomFactor(zoom);
+
+  if (aspectPreset === "picture") {
+    aspectRatio = image.width / image.height;
+  }
+  else if (aspectPreset === "display") {
+    aspectRatio = displayWidth / displayHeight;
+  }
+
+  const sizeX = displayHeight * zoom * aspectRatio;
+  const sizeY = displayHeight * zoom;
+
+  const dx = (displayWidth - sizeX) / 2 + xOffset * sizeX;
+  const dy = (displayHeight - sizeY) / 2 + yOffset * sizeY;
+
+  const renderSettings = {
+    backgroundColor,
+    colorThreshold,
+    palette,
+    imageRotation,
+    dx,
+    dy,
+    sizeX,
+    sizeY,
+  };
+
+  const imageSettings = {
+    ...state.imageSettings,
+    aspectRatio,
+  };
+
+  const newState = {
+    ...state,
+    imageSettings,
+    renderSettings,
+  };
+
+  return [
+    newState,
+    [renderImageFromBitmap, newState],
+  ];
+};
 
 const zoomFactor = (step) => Math.exp((step - 50) / 25);
 const aspectToFactor = (value) => Math.exp((value - 500) / 200);
@@ -428,9 +467,9 @@ const renderImageFromURL = (dispatch, [sourceImageURL, state]) => {
 };
 
 const renderImageFromBitmap = (dispatch, state) => {
-  const {sourceImageBitmap, imageSettings} = state;
+  const {sourceImageBitmap, renderSettings} = state;
   const {displayWidth, displayHeight} = state.serverstatus;
-  renderImage(sourceImageBitmap, displayWidth, displayHeight, imageSettings)
+  renderImage(sourceImageBitmap, displayWidth, displayHeight, renderSettings)
   .then(result => dispatch(SetImageData, result));
 };
 
@@ -532,12 +571,8 @@ const SetSourceImageBitmap = (state, sourceImageBitmap) => rerenderImage({
   sourceImageBitmap,
 });
 
-const SetImageData = (state, {imageURL, imageBlob, ...imageSettings}) => storeLocal({
+const SetImageData = (state, {imageURL, imageBlob}) => storeLocal({
   ...state,
-  imageSettings: {
-    ...state.imageSettings,
-    ...imageSettings,
-  },
   imageURL,
   imageBlob,
 });
