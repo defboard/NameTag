@@ -355,13 +355,15 @@ const storeLocal = (state) => {
   return UpdateUI(state);
 };
 
-const rerenderImage = (state) => {
+const updateImage = (state, updateImageSettings={}) => {
   const image = state.sourceImageBitmap;
   if (!image) {
-    return [state];
+    return [storeLocal(state)];
   }
 
   const {displayWidth, displayHeight} = state.serverstatus;
+
+  const newImageSettings = {...state.imageSettings, ...updateImageSettings};
   let {
     backgroundColor,
     aspectPreset,
@@ -372,7 +374,7 @@ const rerenderImage = (state) => {
     colorThreshold,
     palette,
     imageRotation,
-  } = state.imageSettings;
+  } = newImageSettings;
   zoom = zoomFactor(zoom);
 
   if (aspectPreset === "picture") {
@@ -400,7 +402,7 @@ const rerenderImage = (state) => {
   };
 
   const imageSettings = {
-    ...state.imageSettings,
+    ...newImageSettings,
     aspectRatio,
   };
 
@@ -411,7 +413,7 @@ const rerenderImage = (state) => {
   };
 
   return [
-    newState,
+    storeLocal(newState),
     [renderImageFromBitmap, newState],
   ];
 };
@@ -494,13 +496,13 @@ const RELOAD_TIMEOUT = 10_000;
 
 const GotServerStatus = (state, serverstatus) => {
   return [
-    ...rerenderImage(storeLocal({
+    ...updateImage({
       ...state,
       serverstatus: {
         ...state.serverstatus,
         ...serverstatus,
       },
-    })),
+    }),
     [timeout, [DISABLE_TIMEOUT, EnableInputs]],
   ];
 };
@@ -566,7 +568,7 @@ const SetSourceImageURL = (state, sourceImageURL) => storeLocal({
   sourceImageURL,
 });
 
-const SetSourceImageBitmap = (state, sourceImageBitmap) => rerenderImage({
+const SetSourceImageBitmap = (state, sourceImageBitmap) => updateImage({
   ...state,
   sourceImageBitmap,
 });
@@ -588,10 +590,7 @@ const PrefsSave = (state, event) => ([
 
 const PrefsRestore = (state) => storeLocal({...state, editstatus: {}});
 
-const ResetSettings = (state) => rerenderImage(storeLocal({
-    ...state,
-    imageSettings: defaultSettings,
-}));
+const ResetSettings = (state) => updateImage(state, defaultSettings);
 
 const UploadFirmware = (state) => ([
   DisableInputs(state),
@@ -632,23 +631,15 @@ const EditImage = (key) => (state, event) => {
 };
 
 const EditAspectRatio = (state, event) =>
-  rerenderImage(storeLocal({
-    ...state,
-    imageSettings: {
-      ...state.imageSettings,
+  updateImage(state, {
       aspectPreset: "custom",
       aspectRatio: aspectToFactor(event.target.value),
-    },
-  }));
+  });
 
 const EditImageSetting = (key) => (state, event) =>
-  rerenderImage(storeLocal({
-    ...state,
-    imageSettings: {
-      ...state.imageSettings,
+  updateImage(state, {
       [key]: event.target.value,
-    },
-  }));
+  });
 
 
 const StopDrag = (state, event) => ({...state, isDragging: false});
@@ -687,14 +678,10 @@ const DoDrag = (state, event) => {
   const xOffset = state.dragImageOffsetX + (dx * cos - dy * sin) / sizeX;
   const yOffset = state.dragImageOffsetY + (dx * sin + dy * cos) / sizeY;
 
-  return rerenderImage(storeLocal({
-    ...state,
-    imageSettings: {
-      ...imageSettings,
+  return updateImage(state, {
       xOffset,
       yOffset,
-    },
-  }));
+  });
 };
 
 const DoZoom = (state, event) => {
@@ -714,15 +701,11 @@ const DoZoom = (state, event) => {
     zoom = zoom + Math.sign(-deltaY);
   }
 
-  return rerenderImage(storeLocal({
-    ...state,
-    imageSettings: {
-      ...imageSettings,
+  return updateImage(state, {
       aspectPreset,
       aspectRatio,
       zoom,
-    },
-  }));
+  });
 };
 
 
