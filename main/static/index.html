@@ -886,6 +886,7 @@ app({
           AppInput(state, "imageSettings.aspectPreset", "Aspect preset:", RadioList("aspectPreset", [
             {value: "picture", label: "Picture"},
             {value: "display", label: "Display"},
+            {value: "custom", label: "User"},
           ], EditImageSetting("aspectPreset"), h("span", {}))),
 
           state.imageURL &&
