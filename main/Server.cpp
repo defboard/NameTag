@@ -77,7 +77,7 @@ void initWebServer()
   updateServer.setup(&server, "/update");
   server.begin();
 
-  xTaskCreatePinnedToCore(handleServer, "server", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(handleServer, "server", 4096, NULL, 1, NULL, 0);
 }
 
 void handleServer(void* args)
