@@ -162,6 +162,10 @@ dt.error, dd.error {
 
     <script type="module">
 
+// The quoto for localStorage is 5MiB per origin. We restrict to 4.5MB to
+// have some leeway for other settings:
+const MAX_DATAURL_SIZE = 4_500_000;
+
 import { h, text, app } from "./hyperapp.js"
 
 const objRetrieve = (obj, keys) => {
@@ -281,12 +285,38 @@ const renderImage = async function (image, width, height, renderSettings) {
   };
 };
 
-const readAsDataURL = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = (e) => resolve(e.target.result);
-  reader.onerror = (e) => reject("Failed to load DataURL from File");
-  reader.readAsDataURL(file);
-});
+const readAsDataURL = async function (file) {
+  const bitmap = await window.createImageBitmap(file);
+
+  let decimateFactor = 1;
+  let dataURL = null;
+
+  const MAX_WIDTH = 1280;
+  const MAX_HEIGHT = 1280;
+
+  while (bitmap.width / decimateFactor > MAX_WIDTH ||
+         bitmap.height / decimateFactor > MAX_HEIGHT)
+  {
+    decimateFactor *= 2;
+  }
+
+  while (!dataURL || dataURL.length >= MAX_DATAURL_SIZE) {
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width / decimateFactor;
+    canvas.height = bitmap.height / decimateFactor;
+
+    const context = canvas.getContext("2d");
+    context.drawImage(
+      bitmap,
+      0, 0, bitmap.width, bitmap.height,
+      0, 0, canvas.width, canvas.height);
+    dataURL = canvas.toDataURL();
+
+    decimateFactor = decimateFactor * 2;
+  }
+
+  return dataURL;
+};
 
 
 // Local storage
@@ -346,10 +376,8 @@ const storeLocal = (state) => {
   localStorage.setItem(storageKey, JSON.stringify({
     activeTab: state.activeTab,
     serverstatus: state.serverstatus,
-    // The quoto for localStorage is 5MiB per origin. We restrict to 4.5MB to
-    // have some leeway for other settings:
-    sourceImageURL: state.sourceImageURL?.length >= 4_500_000 ? null : state.sourceImageURL,
-    sourceImageName: state.sourceImageURL?.length >= 4_500_000 ? null : state.sourceImageName,
+    sourceImageURL: state.sourceImageURL?.length >= MAX_DATAURL_SIZE ? null : state.sourceImageURL,
+    sourceImageName: state.sourceImageURL?.length >= MAX_DATAURL_SIZE ? null : state.sourceImageName,
     imageSettings: state.imageSettings,
   }));
   return UpdateUI(state);
