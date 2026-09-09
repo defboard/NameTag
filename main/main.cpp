@@ -9,16 +9,16 @@
 
 
 // pin definitions
-const uint8_t PIN_BTN_RESET = 13;
+const uint8_t PIN_BTN_RESET = 9;
 
-const uint8_t EPD_SDI = 23;
-const uint8_t EPD_SCK = 18;
-const uint8_t SPI_MISO = 19;  // not used
+const uint8_t EPD_SDI = 4;
+const uint8_t EPD_SCK = 5;
+const uint8_t SPI_MISO = 8;  // not used
 
-const uint8_t EPD_SS = 5;
-const uint8_t EPD_DC = 26;
-const uint8_t EPD_RST = 27;
-const uint8_t EPD_BUSY = 14;
+const uint8_t EPD_SS = 6;
+const uint8_t EPD_DC = 7;
+const uint8_t EPD_RST = 2;
+const uint8_t EPD_BUSY = 3;
 
 
 // devices
